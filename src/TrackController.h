@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2012 Joerg Pleumann
  * Copyright (C) 2024 christophe bobille
- * 
+ *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
  * version 1.0, as published by the Creative Commons Organisation.
@@ -109,6 +109,11 @@ public:
      * care of them in time. Otherwise the buffer might overflow.
      */
     void begin();
+
+    /**
+     * Generates a new hash and makes sure it does not conflict
+     * with those of other devices in the setup.
+     */
     void generateHash();
 
     /**
@@ -160,21 +165,48 @@ public:
      */
     bool setLocoDirection(uint16_t address, uint8_t direction);
 
-
+    /**
+     * Toggles the direction of the given locomotive. This normally
+     * includes a full stop.
+     */
     bool toggleLocoDirection(uint16_t address);
+
     // bool setLocoSpeed(uint16_t address, uint16_t speed);
     // bool accelerateLoco(uint16_t address);
     // bool decelerateLoco(uint16_t address);
+
+    /**
+     * Sets the given function of the given locomotive (or simply a
+     * function decoder). Valid functions are 0 to 31, with 0
+     * normally denoting the head/backlight. Valid values are, again,
+     * 0 ("off") to 31, although not all protocols support values
+     * beyond 1 (which then means "on").  The return value reflects
+     * whether the call was successful.
+     */
     bool setLocoFunction(uint16_t address, uint8_t function, uint8_t power);
+
     // bool toggleLocoFunction(uint16_t address, uint8_t function);
     // bool setAccessory(uint16_t address, uint8_t position, uint8_t power, uint16_t time);
     // bool setTurnout(uint16_t address, bool straight);
+
+    /**
+     * Queries the direction of the given locomotive and writes it
+     * into the referenced byte. The return value indicates whether
+     * the call was successful and the direction is valid.
+     */
     bool getLocoDirection(uint16_t address, uint8_t *direction);
+
     // bool getLocoSpeed(uint16_t address, uint16_t *speed);
     // bool getLocoFunction(uint16_t address, uint8_t function, uint8_t *power);
     // bool getAccessory(uint16_t address, uint8_t *position, uint8_t *power);
     // bool writeConfig(uint16_t address, uint16_t number, uint8_t value);
+
+    /**
+     * Reads the given config number of the given locomotive into the
+     * given value.
+     */
     bool readConfig(uint16_t address, uint16_t number, uint8_t *value);
+
     // bool getVersion(uint8_t *high, uint8_t *low);
 };
 

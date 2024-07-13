@@ -4,7 +4,7 @@ Cette bibliothèque est sous licence GNU LESSER GENERAL PUBLIC LICENSE - Version
 
 Copyright (C) 2012 Joerg Pleumann
 
-Cette version 9.0.1 est une réécriture profonde à partir de la version 0.9.0, dernière version publiée à ma connaissance.
+Cette version 9.0.1 est une réécriture profonde à partir de la version 0.9.0, dernière version publiée à ma connaissance et qui date de 2013 !
 
 Dans sa version 0.9.0, cette bibliothèque est très bien écrite mais elle est ancienne (2013, c’est beaucoup en programmation), elle n’est pas adaptée aux nouveaux microcontrôleurs comme l’ESP32, comporte quelques manques (comme la reconnaissance automatique en MFX) et doit être optimisée par rapport aux normes C++ 11 et suivantes. Je suis actuellement en train de réécrire certaines parties de cette bibliothèque que je teste au fur et à mesure.
 
@@ -24,7 +24,7 @@ This library is licensed under the GNU LESSER GENERAL PUBLIC LICENSE - Version 2
 
 Copyright (C) 2012 Joerg Pleumann
 
-This version 9.0.1 is a thorough rewrite of version 0.9.0, the last version published to my knowledge.
+This version 9.0.1 is a thorough rewrite of version 0.9.0, the last version published to my knowledge, which dates back to 2013!
 
 In its version 0.9.0, this library is very well written but it is old (2013 is a long time in programming), it is not adapted to new microcontrollers such as the ESP32, has a few shortcomings (such as automatic recognition in MFX) and needs to be optimised in relation to the C++ 11 and later standards. I'm currently rewriting parts of this library and testing them as I go along.
 
