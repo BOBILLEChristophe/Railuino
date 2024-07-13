@@ -1,3 +1,4 @@
+
 /*********************************************************************
  * Railuino - Hacking your Märklin
  *
@@ -13,6 +14,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
  */
+
+/*
+* This exemple is the update of examples/01.Controller/Direction/Direction.ino
+*/
  
 #include "Config.h"
 #include "TrackController.h"
@@ -23,8 +28,6 @@ const bool DEBUG = true;
 
 TrackController ctrl(0xdf24, DEBUG);
 
-void showRegister(uint16_t, String);
-
 void setup() {
   Serial.begin(115200);
   while (!Serial);
@@ -32,30 +35,29 @@ void setup() {
   ctrl.begin();
   Serial.println("Power on");
   ctrl.setPower(true);
-
-  showRegister(1, "Address");
-  showRegister(2, "Min. Voltage");
-  showRegister(3, "Accel. time");
-  showRegister(4, "Decel. time");
-  showRegister(5, "Max. speed");
-  showRegister(6, "Avg. speed");
-  showRegister(7, "Version");
-  showRegister(8, "Manufacturer");
+  Serial.println("Headlights on");
+  ctrl.setLocoFunction(LOCO, 0, 1);
 }
 
-void loop() // Nothing to do
-{}
-
-void showRegister(uint16_t i, String label) {
+void loop() {
   byte b;
   
-  if (ctrl.readConfig(LOCO, i, &b)) {
-    Serial.printf("Register %d - %s: %d", i, label, b);
-    // Serial.print(i, DEC);
-    // Serial.print(" - ");
-    // Serial.print(label);
-    // Serial.print(": ");
-    // Serial.println(b, DEC);
+  Serial.println("Direction forward");
+  ctrl.setLocoDirection(LOCO, DIR_FORWARD);
+  if (ctrl.getLocoDirection(LOCO, &b)) {
+    Serial.print("(Direction is ");
+    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
   }
+  
+  delay(TIME);
+  
+  Serial.println("Direction reverse");
+  ctrl.setLocoDirection(LOCO, DIR_REVERSE);
+  if (ctrl.getLocoDirection(LOCO, &b)) {
+    Serial.print("(Direction is ");
+    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
+  }
+  
+  delay(TIME);
 }
 
