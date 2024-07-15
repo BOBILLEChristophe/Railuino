@@ -2,6 +2,7 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
+ * Copyright (C) 2024 Christophe Bobille
  *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
@@ -14,14 +15,18 @@
  * LICENSE file for more details.
  */
 
+/*
+* This exemple is the update of examples/01.Controller/CV/CV_new.ino
+*/
+
 #include "Config.h"
 #include "TrackController.h"
 
-const uint16_t LOCO = ADDR_MM2 + 78;
-const uint16_t TIME = 2000;
+const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+const uint32_t TIME = 1UL * 60UL * 1000UL; // 1 minute
 const bool DEBUG = true;
 
-TrackController ctrl(0xdf24, DEBUG);
+TrackController ctrl(0xDF24, DEBUG);
 
 void showRegister(uint16_t, String);
 
@@ -43,16 +48,18 @@ void setup()
   showRegister(6, "Avg. speed");
   showRegister(7, "Version");
   showRegister(8, "Manufacturer");
+
+  Serial.println("\n\nSystem stopped. Need to reset.");
 }
 
-void loop() // Nothing to do
+void loop() 
 {
-}
+}// Nothing to do
 
 void showRegister(uint16_t i, String label)
 {
-  byte b;
+  uint8_t b = 0;
 
   if (ctrl.readConfig(LOCO, i, &b))
-    Serial.printf("Register %d - %s : %d", i, label, b);
+    Serial.printf("Register %d - %s : %d \n", i, label, b);
 }

@@ -40,3 +40,99 @@ You'll find the updated files in the "examples" folder, which have the original 
 The original files are kept for memory and comparison.
 
 
+
+
+TrackController Class Documentation
+Overview
+
+The TrackController class abstracts the communication with Märklin model train components using a CAN bus interface. It provides high-level methods for controlling locomotives, turnouts, and accessories, while managing low-level message handling internally. This documentation summarizes the class's functionality and usage patterns for interfacing with model train systems.
+
+Dependencies
+Arduino.h: Arduino standard library.
+TrackMessage.h: Header for defining CAN message structure.
+Config.h: Configuration file (not provided) for specific settings.
+
+Constructors
+TrackController();
+Default constructor initializes the controller with default settings.
+TrackController(uint16_t hash, bool debug);
+Constructor with parameters to initialize the controller with a specific hash and debug mode.
+Destructor
+~TrackController();
+Cleans up resources when the object is destroyed.
+
+Public Methods
+Initialization and Configuration
+void init(uint16_t hash, bool debug, bool loopback);
+
+Initializes the controller with a specified hash, debug mode, and loopback mode.
+void begin();
+
+Initializes the CAN hardware and starts message reception.
+void end();
+
+Stops message reception and clears the internal message buffer.
+void generateHash();
+
+Generates a unique hash for the controller to avoid conflicts on the CAN bus.
+Power and Control
+bool setPower(bool power);
+
+Controls the power state of the track. Stops all locomotives when power is false.
+bool setLocoDirection(uint16_t address, uint8_t direction);
+
+Sets the direction of a locomotive identified by address.
+bool toggleLocoDirection(uint16_t address);
+
+Toggles the direction of a locomotive identified by address.
+bool setLocoSpeed(uint16_t address, uint16_t speed);
+
+Sets the speed of a locomotive identified by address.
+bool setLocoFunction(uint16_t address, uint8_t function, uint8_t power);
+
+Sets a specific function (e.g., lights) of a locomotive.
+bool toggleLocoFunction(uint16_t address, uint8_t function);
+
+Toggles a function (on/off) of a locomotive.
+bool setAccessory(uint16_t address, uint8_t position, uint8_t power, uint16_t time);
+
+Controls a magnetic accessory (e.g., turnout).
+bool setTurnout(uint16_t address, bool straight);
+
+Controls a turnout to be straight or curved.
+Query Methods
+bool getLocoDirection(uint16_t address, uint8_t *direction);
+
+Queries the direction of a locomotive identified by address.
+bool getLocoSpeed(uint16_t address, uint16_t *speed);
+
+Queries the speed of a locomotive identified by address.
+bool getLocoFunction(uint16_t address, uint8_t function, uint8_t *power);
+
+Queries the status of a specific function of a locomotive.
+bool getAccessory(uint16_t address, uint8_t *position, uint8_t *power);
+
+Queries the state of a magnetic accessory.
+Configuration Methods
+bool writeConfig(uint16_t address, uint16_t number, uint8_t value);
+
+Writes a configuration value to a locomotive.
+bool readConfig(uint16_t address, uint16_t number, uint8_t *value);
+
+Reads a configuration value from a locomotive.
+Utility Methods
+bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout);
+
+Sends a message and waits for a response within the specified timeout.
+bool getVersion(uint8_t *high, uint8_t *low);
+
+Queries the software version of the track format processor.
+
+Member Variables
+uint16_t mHash: Hash of the controller instance.
+bool mDebug: Debug mode flag.
+bool mLoopback: Loopback mode flag.
+
+
+
+

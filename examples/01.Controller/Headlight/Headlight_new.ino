@@ -2,6 +2,7 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
+ * Copyright (C) 2024 Christophe Bobille
  * 
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
@@ -14,42 +15,46 @@
  * LICENSE file for more details.
  */
  
-#include <Railuino.h>
+ /*
+ * This exemple is the update of examples/01.Controller/Headlight/Headlight_new.ino
+ */
 
-const word    LOCO  = ADDR_MM2 + 78;
-const word    TIME  = 2000;
-const boolean DEBUG = true;
+#include "Config.h"
+#include "TrackController.h"
+
+const uint16_t LOCO = ADDR_MFX + 6;
+const uint16_t    SPEED = 100;
+const uint16_t    TIME  = 5000;
+const bool DEBUG = true;
 
 TrackController ctrl(0xdf24, DEBUG);
 
 void setup() {
   Serial.begin(115200);
   while (!Serial);
-  
+
   ctrl.begin();
   Serial.println("Power on");
   ctrl.setPower(true);
-  Serial.println("Headlights on");
-  ctrl.setLocoFunction(LOCO, 0, 1);
 }
 
 void loop() {
   byte b;
   
-  Serial.println("Direction forward");
-  ctrl.setLocoDirection(LOCO, DIR_FORWARD);
-  if (ctrl.getLocoDirection(LOCO, &b)) {
-    Serial.print("(Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
+  Serial.println("Lights on");
+  ctrl.setLocoFunction(LOCO, 0, 1);
+  if (ctrl.getLocoFunction(LOCO, 0, &b)) {
+    Serial.print("(Lights are ");
+    Serial.println(b ? "on)" : "off)");
   }
   
   delay(TIME);
   
-  Serial.println("Direction reverse");
-  ctrl.setLocoDirection(LOCO, DIR_REVERSE);
-  if (ctrl.getLocoDirection(LOCO, &b)) {
-    Serial.print("(Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
+  Serial.println("Lights off");
+  ctrl.setLocoFunction(LOCO, 0, 0);
+  if (ctrl.getLocoFunction(LOCO, 0, &b)) {
+    Serial.print("(Lights are ");
+    Serial.println(b ? "on)" : "off)");
   }
   
   delay(TIME);

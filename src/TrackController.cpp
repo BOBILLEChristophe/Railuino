@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2012 Joerg Pleumann
  * Copyright (C) 2024 christophe bobille
- * 
+ *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
  * version 1.0, as published by the Creative Commons Organisation.
@@ -26,39 +26,64 @@ static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate
    TrackController (constructor / destructor)
 -------------------------------------------------------------------  */
 
-TrackController::TrackController() // Constructeur
+TrackController::TrackController() : mHash(0),
+                                     mDebug(false),
+                                     mLoopback(false)
 {
     if (mDebug)
         Serial.println("### Creating controller");
-
-    init(0, false, false);
 }
 
-TrackController::TrackController(uint16_t hash, bool debug) // Constructeur
+TrackController::TrackController(uint16_t hash, bool debug) : mHash(hash),
+                                                              mDebug(debug),
+                                                              mLoopback(false)
 {
     if (mDebug)
         Serial.println("### Creating controller with param");
-
-    init(hash, debug, false);
 }
 
 TrackController::~TrackController() // Destructeur
 {
     if (mDebug)
         Serial.println("### Destroying controller");
-
-    end();
 }
 
 /* -------------------------------------------------------------------
    TrackController::init
 -------------------------------------------------------------------  */
 
-void TrackController::init(uint16_t hash, bool debug, bool loopback)
+// void TrackController::init(uint16_t hash, bool debug, bool loopback)
+// {
+//     mHash = hash;
+//     mDebug = debug;
+//     mLoopback = loopback;
+// }
+
+/* -------------------------------------------------------------------
+   TrackController::getHash
+-------------------------------------------------------------------  */
+
+uint16_t TrackController::getHash()
 {
-    mHash = hash;
-    mDebug = debug;
-    mLoopback = loopback;
+    return mHash;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::isDebug
+-------------------------------------------------------------------  */
+
+bool TrackController::isDebug()
+{
+    return mDebug;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::isLoopback
+-------------------------------------------------------------------  */
+
+bool TrackController::isLoopback()
+{
+    return mLoopback;
 }
 
 /* -------------------------------------------------------------------
@@ -83,7 +108,7 @@ void TrackController::begin()
         Serial.println("Configuration CAN OK");
     Serial.println("");
 
-    // delay(500);
+    delay(500);
 
     if (!mLoopback)
     {
@@ -105,10 +130,16 @@ void TrackController::begin()
    TrackController::end
 -------------------------------------------------------------------  */
 
-void TrackController::end()
-{
-    // Probablement plus nécessaires
-}
+// void TrackController::end() {
+// 	detachInterrupt(CAN_INT);
+
+// 	can_t t;
+
+// 	boolean b = dequeue(&t);
+// 	while (b) {
+// 		b = dequeue(&t);
+// 	}
+// }
 
 /* -------------------------------------------------------------------
    TrackController::sendMessage
@@ -119,7 +150,7 @@ bool TrackController::sendMessage(TrackMessage &message)
     CANMessage can;
 
     message.hash = mHash;
-    can.id = (message.priority << 25) | (message.command << 18) | (message.response << 17) | message.hash;
+    can.id = (message.priority << 25) | (message.command << 17) | (message.response << 16) | message.hash;
     can.ext = true;
     can.len = message.length;
     for (byte i = 0; i < message.length; i++)
@@ -270,27 +301,64 @@ bool TrackController::setPower(bool power)
 
     if (power)
     {
+        /*
+          Réinitialiser le compteur de réenregistrement MFX
+          Commande système (0x00, dans CAN-ID : 0x00)
+          Sous-commande : Compteur de réenregistrement (0x09)
+        */
         message.clear();
-        message.command = 0x00;
+        message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
+        message.response = false; // bit de réponse desactivé.
         message.length = 7;
-        message.data[4] = 0x09;
-        message.data[6] = 0x0D;
+        message.data[4] = 0x09; // Sous-commande Compteur de réenregistrement
+        message.data[6] = 0x0D; // Réinitialiser le compteur de réenregistrement à 13.
 
-        exchangeMessage(message, message, 1000);
+        /* old version */
+        // exchangeMessage(message, message, 1000);
 
+        /* new version */
+        if (!exchangeMessage(message, message, 1000))
+        {
+            if (mDebug)
+                Serial.println("Failed to reset re-registration counter");
+            return false;
+        }
+
+        /*
+         Activer ou désactiver le protocole de voie
+         Commande système (0x00, dans CAN-ID : 0x00)
+         Sous-commande : •	Protocole de voie (0x08)
+       */
         message.clear();
-        message.command = 0x00;
+        message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
+        message.response = false; // bit de réponse desactivé.
         message.length = 6;
-        message.data[4] = 0x08;
-        message.data[5] = 0x07;
+        message.data[4] = 0x08; // Sous-commande protocole de voie
+        message.data[5] = 0x07; // bit0 = MM2 - bit1 = MFX - bit2 = DCC
 
-        exchangeMessage(message, message, 1000);
+        /* old version */
+        // exchangeMessage(message, message, 1000);
+
+        /* new version */
+        if (!exchangeMessage(message, message, 1000))
+        {
+            if (mDebug)
+                Serial.println("Failed to activate track protocol");
+            return false;
+        }
     }
 
+    /*
+      Arrêt du système ou Démarrage du système
+      Commande système (0x00, dans CAN-ID : 0x00)
+      Sous-commande dans data[4] = 0: Arrêt  du système (0x01)
+      Sous-commande dans data[4] = 1: Démarrage du système (0x01)
+    */
     message.clear();
-    message.command = 0x00;
+    message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
+    message.response = false; // bit de réponse desactivé.
     message.length = 5;
-    message.data[4] = power ? true : false;
+    message.data[4] = power ? true : false; // Sous-commande Arrêt ou Démarrage
 
     return exchangeMessage(message, message, 1000);
 }
@@ -299,26 +367,22 @@ bool TrackController::setPower(bool power)
    TrackController::setLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoDirection(uint16_t address, byte direction)
+bool TrackController::setLocoDirection(const uint16_t address, byte direction)
 {
     TrackMessage message;
 
     message.clear();
     message.command = 0x00;
     message.length = 5;
-    // message.data[2] = highByte(address);
-    // message.data[3] = lowByte(address);
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
-    message.data[4] = 0x03;
+    message.data[4] = 0x03; //!\\ ARRET D'URGENCE : Pourquoi ?
 
     exchangeMessage(message, message, 1000);
 
     message.clear();
     message.command = 0x05;
     message.length = 3;
-    // message.data[2] = highByte(address);
-    // message.data[3] = lowByte(address);
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
     message.data[4] = direction;
@@ -327,9 +391,9 @@ bool TrackController::setLocoDirection(uint16_t address, byte direction)
 }
 
 /* -------------------------------------------------------------------
-   TrackController::setLocoDirection
+   TrackController::toggleLocoDirection
 -------------------------------------------------------------------  */
-bool TrackController::toggleLocoDirection(uint16_t address)
+bool TrackController::toggleLocoDirection(const uint16_t address)
 {
     return setLocoDirection(address, DIR_CHANGE);
 }
@@ -338,7 +402,7 @@ bool TrackController::toggleLocoDirection(uint16_t address)
    TrackController::getLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::getLocoDirection(uint16_t address, byte *direction)
+bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
 {
     TrackMessage message;
 
@@ -361,40 +425,285 @@ bool TrackController::getLocoDirection(uint16_t address, byte *direction)
    TrackController::setLocoFunction
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoFunction(uint16_t address, byte function, byte power) {
-	TrackMessage message;
+bool TrackController::setLocoFunction(const uint16_t address, byte function, byte power)
+{
+    TrackMessage message;
 
-	message.clear();
-	message.command = 0x06;
-	message.length = 0x06;
-	message.data[2] = highByte(address);
-	message.data[3] = lowByte(address);
-	message.data[4] = function;
-	message.data[5] = power;
+    message.clear();
+    message.command = 0x06;
+    message.length = 6;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = function;
+    message.data[5] = power;
 
-	return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, 1000);
 }
 
 /* -------------------------------------------------------------------
-   TrackController::setLocoFunction
+   TrackController::readConfig
 -------------------------------------------------------------------  */
 
-bool TrackController::readConfig(uint16_t address, uint16_t number, byte *value) {
-	TrackMessage message;
+bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *value)
+{
+    TrackMessage message;
 
-	message.clear();
-	message.command = 0x07;
-	message.length = 0x07;
-	message.data[2] = highByte(address);
-	message.data[3] = lowByte(address);
-	message.data[4] = highByte(number);
-	message.data[5] = lowByte(number);
-	message.data[6] = 0x01;
+    message.clear();
+    message.command = 0x07;
+    message.length = 7;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = highByte(number);
+    message.data[5] = lowByte(number);
+    message.data[6] = 0x01;
 
-	if (exchangeMessage(message, message, 10000)) {
-		*value = message.data[6];
-		return true;
-	} else {
-		return false;
-	}
+    if (exchangeMessage(message, message, 10000))
+    {
+        *value = message.data[6];
+        return true;
+    }
+    else
+        return false;
 }
+
+/* -------------------------------------------------------------------
+   TrackController::getLocoFunction
+-------------------------------------------------------------------  */
+
+bool TrackController::getLocoFunction(const uint16_t address, byte function, byte *power)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x06;
+    message.length = 5;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = function;
+
+    if (exchangeMessage(message, message, 1000))
+    {
+        *power = message.data[5];
+        return true;
+    }
+    else
+        return false;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::setLocoSpeed
+-------------------------------------------------------------------  */
+
+bool TrackController::setLocoSpeed(const uint16_t address, uint16_t speed)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x04;
+    message.length = 6;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = address & 0x00FF;
+    message.data[4] = (speed & 0xFF00) >> 8;
+    message.data[5] = speed & 0x00FF;
+
+    return exchangeMessage(message, message, 1000);
+}
+
+/* -------------------------------------------------------------------
+   TrackController::toggleLocoFunction
+-------------------------------------------------------------------  */
+bool TrackController::toggleLocoFunction(const uint16_t address, byte function)
+{
+    byte power;
+    if (getLocoFunction(address, function, &power))
+    {
+        return setLocoFunction(address, function, power ? 0 : 1);
+    }
+    return false;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::setAccessory
+-------------------------------------------------------------------  */
+boolean TrackController::setAccessory(const uint16_t address, byte position, byte power, uint16_t time)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x0B;
+    message.length = 6;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = position;
+    message.data[5] = power;
+
+    exchangeMessage(message, message, 1000);
+
+    if (time != 0)
+    {
+        delay(time);
+
+        message.clear();
+        message.command = 0x0B;
+        message.length = 6;
+        message.data[2] = (address & 0xFF00) >> 8;
+        message.data[3] = (address & 0x00FF);
+        message.data[4] = position;
+
+        exchangeMessage(message, message, 1000);
+    }
+    return true;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::setTurnout
+-------------------------------------------------------------------  */
+
+bool TrackController::setTurnout(const uint16_t address, bool straight)
+{
+    return setAccessory(address, straight ? ACC_STRAIGHT : ACC_ROUND, 1, 1000);
+}
+
+/* -------------------------------------------------------------------
+   TrackController::getLocoSpeed
+-------------------------------------------------------------------  */
+
+bool TrackController::getLocoSpeed(const uint16_t address, uint16_t *speed)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x04;
+    message.length = 4;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+
+    if (exchangeMessage(message, message, 1000))
+    {
+        *speed = (message.data[4] << 8) | message.data[5];
+        return true;
+    }
+    else
+        return false;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::getAccessory
+-------------------------------------------------------------------  */
+bool TrackController::getAccessory(const uint16_t address, byte *position, byte *power)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x0B;
+    message.length = 4;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+
+    if (exchangeMessage(message, message, 1000))
+    {
+        position[0] = message.data[4];
+        power[0] = message.data[5];
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+/* -------------------------------------------------------------------
+   TrackController::getVersion
+-------------------------------------------------------------------  */
+bool TrackController::getVersion(byte *high, byte *low)
+{
+    bool result = false;
+
+    TrackMessage message;
+
+    message.clear();
+    message.command = 0x18;
+    sendMessage(message);
+
+    delay(500);
+
+    while (receiveMessage(message))
+    {
+        if (message.command = 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10)
+        {
+            *high = message.data[4];
+            *low = message.data[5];
+            result = true;
+        }
+    }
+    return result;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::writeConfig
+-------------------------------------------------------------------  */
+
+bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte value)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.priority = 0x01;
+    message.command = 0x08;
+    message.length = 8;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = highByte(number);
+    message.data[5] = lowByte(number);
+    message.data[6] = value;
+
+    return exchangeMessage(message, message, 10000);
+}
+
+/* -------------------------------------------------------------------
+   TrackController::handleUserCommands
+-------------------------------------------------------------------  */
+
+void TrackController::handleUserCommands()
+{
+    if (Serial.available())
+    {
+        String command = Serial.readStringUntil('\n');
+
+        Serial.println(command);
+        
+        if (command.startsWith("power "))
+        {
+            bool power = command.substring(6).toInt();
+            setPower(power);
+        }
+        else if (command.startsWith("direction "))
+        {
+            uint16_t address = command.substring(10, 15).toInt();
+            uint8_t direction = command.substring(16).toInt();
+            setLocoDirection(address, direction);
+        }
+        else if (command.startsWith("speed "))
+        {
+            uint16_t address = command.substring(6, 11).toInt();
+            uint16_t speed = command.substring(12).toInt();
+            setLocoSpeed(address, speed);
+        }
+        else if (command.startsWith("function "))
+        {
+            uint16_t address = command.substring(9, 14).toInt();
+            uint8_t function = command.substring(15, 16).toInt();
+            uint8_t power = command.substring(16).toInt();
+            setLocoFunction(address, function, power);
+        }
+        else if (command.startsWith("accessory "))
+        {
+            uint16_t address = command.substring(10, 15).toInt();
+            uint8_t position = command.substring(16, 17).toInt();
+            uint8_t power = command.substring(17, 18).toInt();
+            uint16_t time = command.substring(19).toInt();
+            setAccessory(address, position, power, time);
+        }
+    }
+}
+
