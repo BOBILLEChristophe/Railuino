@@ -42,6 +42,14 @@ TrackController::TrackController(uint16_t hash, bool debug) : mHash(hash),
         Serial.println("### Creating controller with param");
 }
 
+TrackController::TrackController(uint16_t hash, bool debug, bool loopback) : mHash(hash),
+                                                                             mDebug(debug),
+                                                                             mLoopback(loopback)
+{
+    if (mDebug)
+        Serial.println("### Creating controller with param");
+}
+
 TrackController::~TrackController() // Destructeur
 {
     if (mDebug)
@@ -371,18 +379,30 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
 {
     TrackMessage message;
 
+    /* Sur la MS2, le changement de direction est pédédé d'un arret d'urgence de la locomotive
+       Commande systeme 0x00 Sous Commande 0x03
+
+       Cet arret d'urgence est remplace ici par une vitesse 0
+    */
+    // message.clear();
+    // message.command = 0x00;
+    // message.length = 5;
+    // message.data[2] = (address & 0xFF00) >> 8;
+    // message.data[3] = (address & 0x00FF);
+    // message.data[4] = 0x03;
+
     message.clear();
-    message.command = 0x00;
-    message.length = 5;
+    message.command = 0x04;
+    message.length = 6;
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
-    message.data[4] = 0x03; //!\\ ARRET D'URGENCE : Pourquoi ?
+    message.data[5] = 0;
 
     exchangeMessage(message, message, 1000);
 
     message.clear();
     message.command = 0x05;
-    message.length = 3;
+    message.length = 5;
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
     message.data[4] = direction;
@@ -664,46 +684,39 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
    TrackController::handleUserCommands
 -------------------------------------------------------------------  */
 
-void TrackController::handleUserCommands()
+void TrackController::handleUserCommands(String command)
 {
-    if (Serial.available())
+    if (command.startsWith("power "))
     {
-        String command = Serial.readStringUntil('\n');
-
-        Serial.println(command);
-        
-        if (command.startsWith("power "))
-        {
-            bool power = command.substring(6).toInt();
-            setPower(power);
-        }
-        else if (command.startsWith("direction "))
-        {
-            uint16_t address = command.substring(10, 15).toInt();
-            uint8_t direction = command.substring(16).toInt();
-            setLocoDirection(address, direction);
-        }
-        else if (command.startsWith("speed "))
-        {
-            uint16_t address = command.substring(6, 11).toInt();
-            uint16_t speed = command.substring(12).toInt();
-            setLocoSpeed(address, speed);
-        }
-        else if (command.startsWith("function "))
-        {
-            uint16_t address = command.substring(9, 14).toInt();
-            uint8_t function = command.substring(15, 16).toInt();
-            uint8_t power = command.substring(16).toInt();
-            setLocoFunction(address, function, power);
-        }
-        else if (command.startsWith("accessory "))
-        {
-            uint16_t address = command.substring(10, 15).toInt();
-            uint8_t position = command.substring(16, 17).toInt();
-            uint8_t power = command.substring(17, 18).toInt();
-            uint16_t time = command.substring(19).toInt();
-            setAccessory(address, position, power, time);
-        }
+        bool power = command.substring(6).toInt();
+        setPower(power);
     }
+    else if (command.startsWith("direction "))
+    {
+        uint16_t address = command.substring(10, 15).toInt();
+        uint8_t direction = command.substring(16).toInt();
+        setLocoDirection(address, direction);
+    }
+    else if (command.startsWith("speed "))
+    {
+        uint16_t address = command.substring(6, 11).toInt();
+        uint16_t speed = command.substring(12).toInt();
+        setLocoSpeed(address, speed);
+    }
+    else if (command.startsWith("function "))
+    {
+        uint16_t address = command.substring(9, 14).toInt();
+        uint8_t function = command.substring(15, 16).toInt();
+        uint8_t power = command.substring(16).toInt();
+        setLocoFunction(address, function, power);
+    }
+    else if (command.startsWith("accessory "))
+    {
+        uint16_t address = command.substring(10, 15).toInt();
+        uint8_t position = command.substring(16, 17).toInt();
+        uint8_t power = command.substring(17, 18).toInt();
+        uint16_t time = command.substring(19).toInt();
+        setAccessory(address, position, power, time);
+    }
+    //}
 }
-

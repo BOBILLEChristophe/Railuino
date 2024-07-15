@@ -73,6 +73,11 @@ public:
    */
   TrackController(uint16_t hash, bool debug);
   /**
+   * Creates a new TrackController with the given hash and debugging
+   * flag. A zero hash will result in a unique hash begin generated.
+   */
+  TrackController(uint16_t hash, bool debug, bool loopback);
+  /**
    * Is called when a TrackController is being destroyed. Does the
    * necessary cleanup. No need to call this manually.
    */
@@ -84,7 +89,7 @@ public:
    * effect. A zero hash will result in a unique hash begin
    * generated.
    */
-  //void init(uint16_t hash, bool debug, bool loopback);
+  // void init(uint16_t hash, bool debug, bool loopback);
 
   /**
    * Queries the hash used by the TrackController.
@@ -121,7 +126,7 @@ public:
    * Stops receiving messages from the CAN hardware. Clears
    * the internal buffer.
    */
-  //void end();
+  // void end();
 
   /**
    * Sends a message and reports true on success. Internal method.
@@ -259,12 +264,12 @@ public:
    * locomotive.  The return value reflects whether the call was
    * successful.
    */
-/* -------------------------------------------------------------------
-   TrackController::writeConfig
+  /* -------------------------------------------------------------------
+     TrackController::writeConfig
 
-   See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 3.8 Commande : Écrire Config
+     See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 3.8 Commande : Écrire Config
 
--------------------------------------------------------------------  */
+  -------------------------------------------------------------------  */
   bool writeConfig(const uint16_t address, uint16_t number, uint8_t value);
 
   /**
@@ -274,7 +279,7 @@ public:
 
   //!\\ Les décodeurs MFX de première génération ne sont pas conçus pour cela et pourraient être endommagés
   //!\\ First-generation MFX decoders are not designed for this purpose and could be damaged.
-  
+
   // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.8 Befehl: Fast Read für mfx SID - Adresse
 
   bool readConfig(const uint16_t address, uint16_t number, uint8_t *value);
@@ -284,7 +289,10 @@ public:
    */
   bool getVersion(uint8_t *high, uint8_t *low);
 
-  void handleUserCommands();
+  /**
+   * Processes commands received on the serial or TCP port
+   */
+  void handleUserCommands(String);
 };
 
 #endif // TRACKCONTROLLER_H

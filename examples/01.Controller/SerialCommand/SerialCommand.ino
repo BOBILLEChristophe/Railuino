@@ -36,5 +36,10 @@ void setup()
 
 void loop()
 {
-  ctrl.handleUserCommands();
+  if (Serial.available())
+  {
+    String command = Serial.readStringUntil('\n');
+    Serial.println(command);
+    ctrl.handleUserCommands(command);
+  }
 }
