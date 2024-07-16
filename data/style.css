@@ -1,0 +1,43 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+h1 {
+    text-align: center;
+}
+
+.toggle-button {
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px;
+    cursor: pointer;
+    background-color: green;
+}
+
+.toggle-button.power-on {
+    background-color: red;
+}
+
+.toggle-button.power-off {
+    background-color: green;
+}
+
+#speedSlider {
+    width: 100%;
+    margin: 10px 0;
+}
+
+.image-buttons {
+    display: flex;
+    justify-content: center;
+}
+
+.address-button {
+    margin: 0 10px;
+    width: 90px;
+    height: 60px;
+    cursor: pointer;
+}
+
+
