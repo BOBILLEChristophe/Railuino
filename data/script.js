@@ -64,13 +64,13 @@ document.getElementById('powerButton').addEventListener('click', () => {
     fetch('/setPower', { method: 'POST' })
         .then(response => response.text())
         .then(state => {
-            //isPowerOn = state === 'true';
+            isPowerOn = state === 'true';
             const powerButton = document.getElementById('powerButton');
-            if (state == true) {
+            if (isPowerOn == true) {
                 powerButton.classList.remove('power-off');
                 powerButton.classList.add('power-on');
                 addLogMessage('Power ON');
-            } else if (state == false) {
+            } else if (isPowerOn == false) {
                 powerButton.classList.remove('power-on');
                 powerButton.classList.add('power-off');
                 addLogMessage('Power OFF');

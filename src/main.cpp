@@ -119,16 +119,14 @@ void handleFavinco()
     file.close();
 }
 
-
-
-bool togglePower()
-{
-    powerState = !powerState;
-    return ctrl.setPower(powerState);
-}
-
 void handleSetPower()
 {
+    auto togglePower = [&]() -> bool
+    {
+        powerState = !powerState;
+        return ctrl.setPower(powerState);
+    };
+
     if (togglePower())
     {
         if (powerState)
@@ -159,8 +157,11 @@ void handleSetSystemHalt()
     if (server.hasArg("address"))
     {
         uint16_t address = server.arg("address").toInt();
-        ctrl.systemHalt(address);
-        server.send(200, "text/plain", "SystemHalt");
+        const bool ok = ctrl.systemHalt(address);
+        if (ok)
+            server.send(200, "text/plain", "SystemHalt");
+        else
+            server.send(200, "text/plain", " Server erro#");
     }
     else
         server.send(400, "text/plain", "Address parameter missing");
@@ -177,7 +178,6 @@ void handleSetDirection()
     else
         server.send(400, "text/plain", "Address parameter missing");
 }
-
 
 void handleSetSpeed()
 {

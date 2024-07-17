@@ -60,6 +60,8 @@ private:
    */
   bool mLoopback;
 
+  time_t mTimeout;
+
 public:
   /**
    * Creates a new TrackController with default values. This should
@@ -71,12 +73,12 @@ public:
    * Creates a new TrackController with the given hash and debugging
    * flag. A zero hash will result in a unique hash begin generated.
    */
-  TrackController(uint16_t hash, bool debug);
+  TrackController(uint16_t hash, bool debug, time_t timeOut = 1000);
   /**
    * Creates a new TrackController with the given hash and debugging
    * flag. A zero hash will result in a unique hash begin generated.
    */
-  TrackController(uint16_t hash, bool debug, bool loopback);
+  TrackController(uint16_t hash, bool debug, bool loopback, time_t timeOut = 1000);
   /**
    * Is called when a TrackController is being destroyed. Does the
    * necessary cleanup. No need to call this manually.

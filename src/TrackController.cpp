@@ -28,23 +28,28 @@ static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate
 
 TrackController::TrackController() : mHash(0),
                                      mDebug(false),
-                                     mLoopback(false)
+                                     mLoopback(false),
+                                     mTimeout(1000)
 {
     if (mDebug)
         Serial.println("### Creating controller");
 }
 
-TrackController::TrackController(uint16_t hash, bool debug) : mHash(hash),
+TrackController::TrackController(uint16_t hash, bool debug, time_t timeOut) :
+                                                              mHash(hash),
                                                               mDebug(debug),
-                                                              mLoopback(false)
+                                                              mLoopback(false),
+                                                              mTimeout(timeOut)
 {
     if (mDebug)
         Serial.println("### Creating controller with param");
 }
 
-TrackController::TrackController(uint16_t hash, bool debug, bool loopback) : mHash(hash),
+TrackController::TrackController(uint16_t hash, bool debug, bool loopback, time_t timeOut) :
+                                                                             mHash(hash),
                                                                              mDebug(debug),
-                                                                             mLoopback(loopback)
+                                                                             mLoopback(loopback),
+                                                                             mTimeout(timeOut)
 {
     if (mDebug)
         Serial.println("### Creating controller with param");
@@ -306,6 +311,9 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
 bool TrackController::setPower(bool power)
 {
     TrackMessage message;
+    auto exchange = [this, &message](uint16_t timeout) {
+        return exchangeMessage(message, message, timeout);
+    };
 
     if (power)
     {
@@ -326,10 +334,8 @@ bool TrackController::setPower(bool power)
         // exchangeMessage(message, message, 1000);
 
         /* new version */
-        if (!exchangeMessage(message, message, 1000))
-        {
-            if (mDebug)
-                Serial.println("Failed to reset re-registration counter");
+        if (!exchange(mTimeout)) {
+            if (mDebug) Serial.println("Failed to reset re-registration counter");
             return false;
         }
 
@@ -350,10 +356,8 @@ bool TrackController::setPower(bool power)
         // exchangeMessage(message, message, 1000);
 
         /* new version */
-        if (!exchangeMessage(message, message, 1000))
-        {
-            if (mDebug)
-                Serial.println("Failed to activate track protocol");
+       if (!exchange(mTimeout)) {
+            if (mDebug) Serial.println("Failed to activate track protocol");
             return false;
         }
     }
@@ -371,7 +375,7 @@ bool TrackController::setPower(bool power)
     message.length = 5;
     message.data[4] = power ? true : false; // Sous-commande Arrêt ou Démarrage
 
-    return exchangeMessage(message, message, 1000);
+    return exchange(mTimeout);
 }
 
 
@@ -391,7 +395,7 @@ bool TrackController::systemHalt(const uint16_t address)
     message.data[3] = (address & 0x00FF);
     message.data[4] = 0x02;
 
-    return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
@@ -410,7 +414,7 @@ bool TrackController::emergency(const uint16_t address)
     message.data[3] = (address & 0x00FF);
     message.data[4] = 0x03;
 
-    return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
@@ -440,7 +444,7 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
     message.data[3] = (address & 0x00FF);
     message.data[5] = 0;
 
-    exchangeMessage(message, message, 1000);
+    exchangeMessage(message, message, mTimeout);
 
     message.clear();
     message.command = 0x05;
@@ -449,7 +453,7 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
     message.data[3] = (address & 0x00FF);
     message.data[4] = direction;
 
-    return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
@@ -474,7 +478,7 @@ bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
 
-    if (exchangeMessage(message, message, 1000))
+    if (exchangeMessage(message, message, mTimeout))
     {
         *direction = message.data[4];
         return true;
@@ -499,7 +503,7 @@ bool TrackController::setLocoFunction(const uint16_t address, byte function, byt
     message.data[4] = function;
     message.data[5] = power;
 
-    return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
@@ -519,7 +523,7 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
     message.data[5] = lowByte(number);
     message.data[6] = 0x01;
 
-    if (exchangeMessage(message, message, 10000))
+    if (exchangeMessage(message, message, mTimeout))
     {
         *value = message.data[6];
         return true;
@@ -543,7 +547,7 @@ bool TrackController::getLocoFunction(const uint16_t address, byte function, byt
     message.data[3] = (address & 0x00FF);
     message.data[4] = function;
 
-    if (exchangeMessage(message, message, 1000))
+    if (exchangeMessage(message, message, mTimeout))
     {
         *power = message.data[5];
         return true;
@@ -568,7 +572,7 @@ bool TrackController::setLocoSpeed(const uint16_t address, uint16_t speed)
     message.data[4] = (speed & 0xFF00) >> 8;
     message.data[5] = speed & 0x00FF;
 
-    return exchangeMessage(message, message, 1000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
@@ -599,7 +603,7 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
     message.data[4] = position;
     message.data[5] = power;
 
-    exchangeMessage(message, message, 1000);
+    exchangeMessage(message, message, mTimeout);
 
     if (time != 0)
     {
@@ -612,7 +616,7 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
         message.data[3] = (address & 0x00FF);
         message.data[4] = position;
 
-        exchangeMessage(message, message, 1000);
+        exchangeMessage(message, message, mTimeout);
     }
     return true;
 }
@@ -640,7 +644,7 @@ bool TrackController::getLocoSpeed(const uint16_t address, uint16_t *speed)
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
 
-    if (exchangeMessage(message, message, 1000))
+    if (exchangeMessage(message, message, mTimeout))
     {
         *speed = (message.data[4] << 8) | message.data[5];
         return true;
@@ -662,7 +666,7 @@ bool TrackController::getAccessory(const uint16_t address, byte *position, byte 
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
 
-    if (exchangeMessage(message, message, 1000))
+    if (exchangeMessage(message, message, mTimeout))
     {
         position[0] = message.data[4];
         power[0] = message.data[5];
@@ -719,7 +723,7 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
     message.data[5] = lowByte(number);
     message.data[6] = value;
 
-    return exchangeMessage(message, message, 10000);
+    return exchangeMessage(message, message, mTimeout);
 }
 
 /* -------------------------------------------------------------------
