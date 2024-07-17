@@ -6,6 +6,18 @@ h1 {
     text-align: center;
 }
 
+.log-window {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    max-height: 150px;
+    overflow-y: scroll;
+    background-color: #f9f9f9;
+    font-family: monospace;
+    font-size: 12px;
+}
+
 .toggle-button {
     color: white;
     border: none;
@@ -13,6 +25,15 @@ h1 {
     margin: 10px;
     cursor: pointer;
     background-color: green;
+}
+
+.normal-button {
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px;
+    cursor: pointer;
+    background-color: #a81b9c;
 }
 
 .toggle-button.power-on {
@@ -23,9 +44,28 @@ h1 {
     background-color: green;
 }
 
+.slider-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 20px;
+}
+
 #speedSlider {
-    width: 100%;
-    margin: 10px 0;
+    width: 70%;
+    margin: 0 10px;
+}
+
+.slider-label {
+    font-weight: bold;
+    margin: 0 10px;
+}
+
+.speed-percentage {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 1.2em;
+    margin-bottom: 20px;
 }
 
 .image-buttons {
@@ -40,4 +80,26 @@ h1 {
     cursor: pointer;
 }
 
+.address-button.selected {
+    border: 1px solid black;
+}
 
+.function-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.function-button {
+    margin: 5px;
+    padding: 10px 20px;
+    cursor: pointer;
+    background-color: lightgray;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.function-button.active {
+    background-color: rgb(74, 72, 72);
+    color: white;
+}

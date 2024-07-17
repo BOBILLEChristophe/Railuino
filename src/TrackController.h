@@ -165,6 +165,40 @@ public:
   bool setPower(bool power);
 
   /**
+   *  Cette commande qui n'existait pas a l'origine a ete ajoutee
+   *  a partir de la v-9.01
+   *  Commande système (0x00, dans CAN-ID : 0x00)
+   *  Arrêt d'urgence de la locomotive (0x02)
+   *  Toutes les locomotives reçoivent l'ordre de s'arrêter (vitesse 0),
+   *  y compris l'inertie de freinage. Le signal numérique reste sur les rails,
+   *  mais aucune autre commande n'est envoyée sur les rails.
+   *  L'énergie électrique reste disponible.
+   */
+  // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.3 Commande : System Halt
+  bool systemHalt(const uint16_t address);
+
+  /**
+   *  Cette commande qui n'existait pas a l'origine a ete ajoutee
+   *  a partir de la v-9.01
+   *  Commande système (0x00, dans CAN-ID : 0x00)
+   *  Arrêt d'urgence de la locomotive (0x03)
+   *  Arrêt d'urgence ou arrêt immédiat de la locomotive, selon le protocole de voie.
+   *  Il faut spécifier une locomotive déjà ciblée par une commande.
+   *  Si cette locomotive n'est pas déjà dans le cycle, elle ne sera pas prise en compte par cette commande.
+   */
+
+  /**
+   * This command, which didn't exist originally, has been added from v-9.01
+   * System command (0x00, in CAN-ID: 0x00)
+   * Locomotive emergency stop (0x03)
+   * Emergency stop or immediate stop of locomotive, depending on track protocol.
+   * A locomotive already targeted by a command must be specified.
+   * If this locomotive is not already in the cycle, it will not be taken into account by this command.
+   */
+  // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.4 Commande : Arrêt d'urgence de la locomotive
+  bool emergency(const uint16_t address);
+
+  /**
    * Sets the direction of the given locomotive. Valid directions
    * are those specified by the DIR_* constants. The return value
    * reflects whether the call was successful.

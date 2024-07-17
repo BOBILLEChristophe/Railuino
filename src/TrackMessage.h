@@ -37,7 +37,7 @@ public:
     /**
      * The priority number.
      */
-    uint8_t priority;
+    uint8_t prio;
     /**
      * The command number.
      */

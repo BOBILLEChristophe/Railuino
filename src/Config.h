@@ -27,7 +27,8 @@
 /**
  * Version of Railuino library and required connection box software.
  */
-#define RAILUINO_VERSION 0x005B // 0.91 -> upgrade 0.90 to 0.91 christophe bobille 2024
+//#define RAILUINO_VERSION 0x005B // 0.91 -> upgrade 0.90 to 0.91 christophe bobille 2024
+#define RAILUINO_VERSION 0x005C  // 0.92 -> upgrade 0.90 to 0.91 christophe bobille 2024
 #define TRACKBOX_VERSION 0x0127 // 1.39
 
 /**

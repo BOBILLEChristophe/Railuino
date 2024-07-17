@@ -122,7 +122,7 @@ void TrackController::begin()
     {
         TrackMessage message;
         message.clear();
-        message.priority = 0x00;
+        message.prio = 0x00;
         message.command = 0x1B;
         message.response = false;
         message.length = 5;
@@ -158,7 +158,7 @@ bool TrackController::sendMessage(TrackMessage &message)
     CANMessage can;
 
     message.hash = mHash;
-    can.id = (message.priority << 25) | (message.command << 17) | (message.response << 16) | message.hash;
+    can.id = (message.prio << 25) | (message.command << 17) | (message.response << 16) | message.hash;
     can.ext = true;
     can.len = message.length;
     for (byte i = 0; i < message.length; i++)
@@ -315,6 +315,7 @@ bool TrackController::setPower(bool power)
           Sous-commande : Compteur de réenregistrement (0x09)
         */
         message.clear();
+        message.prio = 0x00;
         message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
         message.response = false; // bit de réponse desactivé.
         message.length = 7;
@@ -338,6 +339,7 @@ bool TrackController::setPower(bool power)
          Sous-commande : •	Protocole de voie (0x08)
        */
         message.clear();
+        message.prio = 0x00;
         message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
         message.response = false; // bit de réponse desactivé.
         message.length = 6;
@@ -359,14 +361,54 @@ bool TrackController::setPower(bool power)
     /*
       Arrêt du système ou Démarrage du système
       Commande système (0x00, dans CAN-ID : 0x00)
-      Sous-commande dans data[4] = 0: Arrêt  du système (0x01)
+      Sous-commande dans data[4] = 0: Arrêt  du système (0x00)
       Sous-commande dans data[4] = 1: Démarrage du système (0x01)
     */
     message.clear();
+    message.prio = 0x00;
     message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
-    message.response = false; // bit de réponse desactivé.
+    message.response = false; // bit de réponse désactivé.
     message.length = 5;
     message.data[4] = power ? true : false; // Sous-commande Arrêt ou Démarrage
+
+    return exchangeMessage(message, message, 1000);
+}
+
+
+/* -------------------------------------------------------------------
+   TrackController::systemHalt
+-------------------------------------------------------------------  */
+
+bool TrackController::systemHalt(const uint16_t address)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x00;
+    message.length = 5;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = 0x02;
+
+    return exchangeMessage(message, message, 1000);
+}
+
+/* -------------------------------------------------------------------
+   TrackController::emergency
+-------------------------------------------------------------------  */
+
+bool TrackController::emergency(const uint16_t address)
+{
+    TrackMessage message;
+
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x00;
+    message.length = 5;
+    message.data[2] = (address & 0xFF00) >> 8;
+    message.data[3] = (address & 0x00FF);
+    message.data[4] = 0x03;
 
     return exchangeMessage(message, message, 1000);
 }
@@ -392,7 +434,7 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
     // message.data[4] = 0x03;
 
     message.clear();
-    message.command = 0x04;
+    message.command = 0x04; // Commande : LocVitesse 
     message.length = 6;
     message.data[2] = (address & 0xFF00) >> 8;
     message.data[3] = (address & 0x00FF);
@@ -668,7 +710,7 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
     TrackMessage message;
 
     message.clear();
-    message.priority = 0x01;
+    message.prio = 0x01;
     message.command = 0x08;
     message.length = 8;
     message.data[2] = (address & 0xFF00) >> 8;
@@ -690,6 +732,11 @@ void TrackController::handleUserCommands(String command)
     {
         bool power = command.substring(6).toInt();
         setPower(power);
+    }
+    else if (command.startsWith("emergency "))
+    {
+        uint16_t address = command.substring(10, 15).toInt();
+        emergency(address);
     }
     else if (command.startsWith("direction "))
     {

@@ -64,7 +64,7 @@ uint8_t parseHex(String &s, uint8_t start, uint8_t end, bool *ok)
 
 void TrackMessage::clear()
 {
-    priority = 0;
+    prio = 0;
     command = 0;
     hash = 0;
     response = false;

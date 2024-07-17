@@ -5,20 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Track Controller</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
 </head>
 <body>
     <h1>Track Controller</h1>
-    <button id="powerButton" class="toggle-button">Power</button>
-    <button id="stopButton">Stop</button>
-    <button id="emergencyButton">Emergency</button>
-    <button id="directionButton" class="toggle-button">&lt;&lt; / &gt;&gt;</button>
-    <input type="range" id="speedSlider" min="0" max="1000" value="0">
+     <div id="logWindow" class="log-window"></div>
     <div class="image-buttons">
         <img src="image1.jpg" class="address-button" data-address="16391">
         <img src="image2.jpg" class="address-button" data-address="11000">
         <img src="image3.jpg" class="address-button" data-address="12000">
         <img src="image4.jpg" class="address-button" data-address="13000">
     </div>
+    <button id="powerButton" class="toggle-button">Power</button>
+    <button id="stopButton" class="normal-button">Stop</button>
+    <button id="systemHaltButton" class="normal-button">System Halt</button>
+    <button id="directionButton" class="toggle-button">&lt;&lt; / &gt;&gt;</button>
+    <div class="slider-container">
+        <span class="slider-label" id="slider-min">0</span>
+        <input type="range" id="speedSlider" min="0" max="1000" value="0">
+        <span class="slider-label" id="slider-max">1000</span>
+    </div>
+    <div class="speed-percentage">
+        Speed: <span id="speedValue">0</span>%
+    </div>
+    <div class="function-buttons">
+        <button class="function-button" data-function="0">F0</button>
+        <button class="function-button" data-function="1">F1</button>
+        <button class="function-button" data-function="2">F2</button>
+        <button class="function-button" data-function="3">F3</button>
+        <button class="function-button" data-function="4">F4</button>
+    </div>
+    <div class="function-buttons">
+        <button class="function-button" data-function="5">F5</button>
+        <button class="function-button" data-function="6">F6</button>
+        <button class="function-button" data-function="7">F7</button>
+        <button class="function-button" data-function="8">F8</button>
+        <button class="function-button" data-function="9">F9</button>
+    </div>
+    
     <script src="script.js"></script>
 </body>
 </html>
