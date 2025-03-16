@@ -23,11 +23,17 @@
 #include "Config.h"
 #include "TrackController.h"
 
-const uint16_t LOCO = ADDR_MFX + 6; // Change with your own address
-const uint32_t TIME = 1UL * 6UL * 1000UL; // 6 seconds
-const bool DEBUG = true;
+const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
 
-TrackController ctrl(0xdf24, DEBUG);
+const uint16_t PAUSE = 10UL * 1000UL;
+
+const bool DEBUG = false;
+const uint64_t TIMEOUT = 500; // ms
+const uint16_t HASH = 0x00;
+const bool LOOPBACK = false;
+
+TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);  // Instance de la classe TrackController, création de l'objet ctrl.
+
 
 void setup() {
   Serial.begin(115200);
@@ -43,22 +49,20 @@ void setup() {
 void loop() {
   byte b;
   
-  Serial.println("Direction forward");
   ctrl.setLocoDirection(LOCO, DIR_FORWARD);
   if (ctrl.getLocoDirection(LOCO, &b)) {
-    Serial.print("(Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
+    Serial.print("Direction is ");
+    Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
   }
   
-  delay(TIME);
+  delay(PAUSE);
   
-  Serial.println("Direction reverse");
   ctrl.setLocoDirection(LOCO, DIR_REVERSE);
   if (ctrl.getLocoDirection(LOCO, &b)) {
-    Serial.print("(Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward)" : "reverse)");
+    Serial.print("Direction is ");
+    Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
   }
   
-  delay(TIME);
+  delay(PAUSE);
 }
 

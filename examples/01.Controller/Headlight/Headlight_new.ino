@@ -19,44 +19,48 @@
  * This exemple is the update of examples/01.Controller/Headlight/Headlight_new.ino
  */
 
-#include "Config.h"
-#include "TrackController.h"
-
-const uint16_t LOCO = ADDR_MFX + 6;
-const uint16_t    SPEED = 100;
-const uint16_t    TIME  = 5000;
-const bool DEBUG = true;
-
-TrackController ctrl(0xdf24, DEBUG);
-
-void setup() {
-  Serial.begin(115200);
-  while (!Serial);
-
-  ctrl.begin();
-  Serial.println("Power on");
-  ctrl.setPower(true);
-}
-
-void loop() {
-  byte b;
-  
-  Serial.println("Lights on");
-  ctrl.setLocoFunction(LOCO, 0, 1);
-  if (ctrl.getLocoFunction(LOCO, 0, &b)) {
-    Serial.print("(Lights are ");
-    Serial.println(b ? "on)" : "off)");
-  }
-  
-  delay(TIME);
-  
-  Serial.println("Lights off");
-  ctrl.setLocoFunction(LOCO, 0, 0);
-  if (ctrl.getLocoFunction(LOCO, 0, &b)) {
-    Serial.print("(Lights are ");
-    Serial.println(b ? "on)" : "off)");
-  }
-  
-  delay(TIME);
-}
-
+ #include "Config.h"
+ #include "TrackController.h"
+ 
+ const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+ 
+ const uint16_t PAUSE = 5UL * 1000UL;
+ 
+ const bool DEBUG = false;
+ const uint64_t TIMEOUT = 500; // ms
+ const uint16_t HASH = 0x00;
+ const bool LOOPBACK = false;
+ 
+ TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
+ 
+ 
+ void setup() {
+   Serial.begin(115200);
+   while (!Serial);
+ 
+   ctrl.begin();
+   Serial.println("Power on");
+   ctrl.setPower(true);
+ }
+ 
+ void loop() {
+   byte b;
+   
+   ctrl.setLocoFunction(LOCO, 0, 1);
+   if (ctrl.getLocoFunction(LOCO, 0, &b)) {
+     Serial.print("Lights are ");
+     Serial.println(b ? "on" : "off");
+   }
+   
+   delay(PAUSE);
+   
+   ctrl.setLocoFunction(LOCO, 0, 0);
+   if (ctrl.getLocoFunction(LOCO, 0, &b)) {
+     Serial.print("Lights are ");
+     Serial.println(b ? "on" : "off");
+   }
+   
+   delay(PAUSE);
+ }
+ 
+ 

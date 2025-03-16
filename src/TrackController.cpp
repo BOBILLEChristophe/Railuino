@@ -217,8 +217,25 @@ bool TrackController::sendMessage(TrackMessage &message)
 
     if (mDebug)
     {
-        Serial.print("==> 0x");
+        Serial.print("<== ID : 0x");
         Serial.println(frame.id, HEX);
+        Serial.print("EXT : ");
+        Serial.println(frame.ext ? "extended" : "standard");
+        Serial.print("RESP : ");
+        Serial.println((frame.id & 0x10000) >> 16);
+        Serial.print("DLC : ");
+        Serial.println(frame.len);
+        Serial.print("COMMAND : 0x");
+        TrackMessage::printHex(Serial, (frame.id & 0x1FE0000) >> 17, 2);
+        Serial.print("\nDATA : ");
+        for (uint8_t i = 0; i < frame.len; i++)
+        {
+            Serial.print("0x");
+            TrackMessage::printHex(Serial, frame.data[i], 2);
+            if (i < frame.len - 1)
+                Serial.print(" - ");
+        }
+        Serial.print("\n------------------------------------------------------------------\n");
     }
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -226,46 +243,6 @@ bool TrackController::sendMessage(TrackMessage &message)
 #elif defined(ARDUINO_ARCH_AVR)
     return can.tryToSend(frame);
 #endif
-}
-
-/* -------------------------------------------------------------------
-   TrackController::generateHash
--------------------------------------------------------------------  */
-
-void TrackController::generateHash()
-{
-    TrackMessage message;
-
-    bool ok = false;
-
-    while (!ok)
-    {
-        mHash = (random(0x10000) & 0xFF7F) | 0x0300;
-
-        if (mDebug)
-        {
-            Serial.print("### Trying new hash ");
-            message.printHex(Serial, mHash, 4);
-            Serial.println();
-        }
-
-        message.clear();
-        message.command = 0x18; // Ping, demande aux equipements sur le bus
-
-        sendMessage(message);
-
-        delay(mTimeout);
-
-        ok = true;
-        while (receiveMessage(message))
-        {
-            if (message.hash == mHash)
-                ok = false;
-        }
-    }
-
-    if (mDebug)
-        Serial.println(F("### New hash looks good"));
 }
 
 /* -------------------------------------------------------------------
@@ -287,7 +264,7 @@ bool TrackController::receiveMessage(TrackMessage &message)
     {
         if (mDebug)
         {
-            Serial.print("<== ID : 0x");
+            Serial.print("==> ID : 0x");
             Serial.println(frame.id, HEX);
             Serial.print("EXT : ");
             Serial.println(frame.ext ? "extended" : "standard");
@@ -305,7 +282,7 @@ bool TrackController::receiveMessage(TrackMessage &message)
                 if (i < frame.len - 1)
                     Serial.print(" - ");
             }
-            Serial.println();
+            Serial.print("\n------------------------------------------------------------------\n");
         }
 
         message.clear();
@@ -339,8 +316,8 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
         if (mDebug)
         {
             Serial.println(F("!!! Send error"));
-            // Serial.println(F("!!! Emergency stop"));
-            // setPower(false);
+            Serial.println(F("!!! Emergency stop"));
+            setPower(false);
             for (;;)
                 ;
         }
@@ -364,6 +341,49 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
         Serial.println(F("!!! Receive timeout"));
 
     return false;
+}
+
+/* -------------------------------------------------------------------
+   TrackController::generateHash
+-------------------------------------------------------------------  */
+
+void TrackController::generateHash()
+{
+    TrackMessage message;
+
+    bool ok = false;
+
+    while (!ok)
+    {
+        mHash = (random(0x10000) & 0xFF7F) | 0x0300;
+
+        if (mDebug)
+        {
+            Serial.print(F("### Trying new hash 0x"));
+            message.printHex(Serial, mHash, 4);
+            Serial.print(F("\n------------------------------------------------------------------\n"));
+        }
+
+        message.clear();
+        message.command = 0x18; // Ping, demande aux equipements sur le bus
+
+        sendMessage(message);
+
+        delay(mTimeout);
+
+        ok = true;
+        while (receiveMessage(message))
+        {
+            if (message.hash == mHash)
+                ok = false;
+        }
+    }
+
+    if (mDebug)
+    {
+        Serial.print(F("### New hash looks good"));
+        Serial.print(F("\n------------------------------------------------------------------\n"));
+    }
 }
 
 /* -------------------------------------------------------------------
@@ -407,7 +427,8 @@ bool TrackController::setPower(bool power)
         if (mDebug)
         {
             Serial.print("Power ");
-            Serial.println(power ? true : false);
+            Serial.print(power ? "on" : "off");
+            Serial.print("\n------------------------------------------------------------------\n");
         }
     }
 

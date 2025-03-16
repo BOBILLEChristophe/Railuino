@@ -23,10 +23,13 @@
 #include "TrackController.h"
 
 const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
-const uint32_t TIME = 1UL * 60UL * 1000UL; // 1 minute
-const bool DEBUG = true;
 
-TrackController ctrl(0xDF24, DEBUG);
+const bool DEBUG = false;
+const uint64_t TIMEOUT = 500; // ms
+const uint16_t HASH = 0x00;
+const bool LOOPBACK = false;
+
+TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);  // Instance de la classe TrackController, création de l'objet ctrl.
 
 void showRegister(uint16_t, String);
 
@@ -37,7 +40,7 @@ void setup()
     ;
 
   ctrl.begin();
-  Serial.println("Power on");
+  Serial.print("Power on\n\n");
   ctrl.setPower(true);
 
   showRegister(1, "Address");
@@ -61,5 +64,5 @@ void showRegister(uint16_t i, String label)
   uint8_t b = 0;
 
   if (ctrl.readConfig(LOCO, i, &b))
-    Serial.printf("Register %d - %s : %d \n", i, label, b);
+    Serial.print("Register "+label+" : "+b+"\n");
 }

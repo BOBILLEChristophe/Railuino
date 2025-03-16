@@ -19,30 +19,30 @@
  * This exemple is the update of examples/01.Controller/Power/Power.ino
  */
 
-#include "Config.h"
-#include "TrackController.h"
+ #include "Config.h"
+ #include "TrackController.h"
+ 
+ const uint16_t PAUSE  = 5000;
+ const bool DEBUG = true;
+ const uint64_t TIMEOUT = 500; // ms
+ const uint16_t HASH = 0x00;
+ const bool LOOPBACK = false;
+ 
+ TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);  // Instance de la classe TrackController, création de l'objet ctrl.
 
-const uint16_t    TIME  = 5000;
-const bool DEBUG = true;
-
-TrackController ctrl(0xdf24, DEBUG);
-
-void setup() {
-  Serial.begin(115200);
-  while (!Serial);
-  
-  ctrl.begin();
-}
-
-void loop() {
-  Serial.println("Power on");
-  ctrl.setPower(true);
-  
-  delay(TIME);
-  
-  Serial.println("Power off");
-  ctrl.setPower(false);
-  
-  delay(TIME);
-}
-
+ void setup() {
+   Serial.begin(115200);
+   while (!Serial);
+   
+   ctrl.begin();                    // Lancement du contrôleur
+ } 
+ 
+ void loop() {
+   ctrl.setPower(true);             // Allumage de la centrale
+   delay(PAUSE);
+   
+   ctrl.setPower(false);            // Extinction de la centrale
+   delay(PAUSE);
+ }
+ 
+ 
