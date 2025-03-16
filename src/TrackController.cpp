@@ -17,8 +17,17 @@
  */
 
 #include "TrackController.h"
+
+#if defined ARDUINO_ARCH_ESP32
 #include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
 #include <Arduino.h>
+#elif defined ARDUINO_ARCH_AVR
+#include <ACAN2515.h>. // https://github.com/pierremolinaro/acan2515.git
+static const uint32_t QUARTZ_FREQUENCY = 16UL * 1000UL * 1000UL; // 16 MHz
+static const byte MCP2515_INT = 2;                               // INT output of MCP2515 (adapt to your design)
+static const byte MCP2515_CS = 10;                               // CS input of MCP2515 (adapt to your design)
+ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
+#endif
 
 static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate = 250Kbit/s
 
@@ -26,34 +35,43 @@ static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate
    TrackController (constructor / destructor)
 -------------------------------------------------------------------  */
 
-TrackController::TrackController() : mHash(0),
-                                     mDebug(false),
-                                     mLoopback(false),
-                                     mTimeout(1000)
+TrackController::TrackController()
+    : mHash(0),
+      mDebug(false),
+      mLoopback(false),
+      mTimeout(1000)
+{
+    if (mDebug)
+        Serial.println("### Creating controller");
+}
+TrackController::TrackController(uint64_t timeOut)
+    : mHash(0),
+      mDebug(false),
+      mLoopback(false),
+      mTimeout(timeOut)
 {
     if (mDebug)
         Serial.println("### Creating controller");
 }
 
-TrackController::TrackController(uint16_t hash, bool debug, time_t timeOut) :
-                                                              mHash(hash),
-                                                              mDebug(debug),
-                                                              mLoopback(false),
-                                                              mTimeout(timeOut)
+TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut)
+    : mHash(hash),
+      mDebug(debug),
+      mLoopback(false),
+      mTimeout(timeOut)
 {
     if (mDebug)
         Serial.println("### Creating controller with param");
 }
 
-TrackController::TrackController(uint16_t hash, bool debug, bool loopback, time_t timeOut) :
-                                                                             mHash(hash),
-                                                                             mDebug(debug),
-                                                                             mLoopback(loopback),
-                                                                             mTimeout(timeOut)
-{
-    if (mDebug)
-        Serial.println("### Creating controller with param");
-}
+// TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback) : mHash(hash),
+//                                                                                              mDebug(debug),
+//                                                                                              mLoopback(loopback),
+//                                                                                              mTimeout(timeOut)
+// {
+//     if (mDebug)
+//         Serial.println("### Creating controller with param");
+// }
 
 TrackController::~TrackController() // Destructeur
 {
@@ -65,12 +83,15 @@ TrackController::~TrackController() // Destructeur
    TrackController::init
 -------------------------------------------------------------------  */
 
-// void TrackController::init(uint16_t hash, bool debug, bool loopback)
-// {
-//     mHash = hash;
-//     mDebug = debug;
-//     mLoopback = loopback;
-// }
+// Kept for compatibility with older versions but not used from v-0.9.x
+
+void TrackController::init(uint16_t hash, bool debug, bool loopback, uint64_t timeOut)
+{
+    mHash = hash;
+    mDebug = debug;
+    mLoopback = loopback;
+    mTimeout = timeOut;
+}
 
 /* -------------------------------------------------------------------
    TrackController::getHash
@@ -103,14 +124,24 @@ bool TrackController::isLoopback()
    TrackController::begin
 -------------------------------------------------------------------  */
 
-void TrackController::begin()
+void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
 {
-    //--- Configure ESP32 CAN
+    //--- Configure CAN
+
+#if defined ARDUINO_ARCH_ESP32
     Serial.println("Configure ESP32 CAN");
-    ACAN_ESP32_Settings settings(DESIRED_BIT_RATE);
-    settings.mRxPin = GPIO_NUM_22; // Optional, default Tx pin is GPIO_NUM_4
-    settings.mTxPin = GPIO_NUM_23; // Optional, default Rx pin is GPIO_NUM_5
+    ACAN_ESP32_Settings settings(DESIRED_BIT_RATE); // Marklin CAN baudrate = 250Kbit/s
+    settings.mRxPin = (gpio_num_t)can_rx_pin;
+    settings.mTxPin = (gpio_num_t)can_tx_pin;
     const uint32_t errorCode = ACAN_ESP32::can.begin(settings);
+#elif defined ARDUINO_ARCH_AVR
+    //--- Begin SPI
+    SPI.begin();
+    Serial.println("Configure ACAN2515");
+    ACAN2515Settings settings(QUARTZ_FREQUENCY, DESIRED_BIT_RATE);
+    const uint16_t errorCode = can.begin(settings, []
+                                         { can.isr(); });
+#endif
 
     if (errorCode)
     {
@@ -118,7 +149,21 @@ void TrackController::begin()
         Serial.println(errorCode, HEX);
     }
     else
-        Serial.println("Configuration CAN OK");
+    {
+        Serial.print("Bit Rate prescaler: ");
+        Serial.println(settings.mBitRatePrescaler);
+        Serial.print("Triple Sampling: ");
+        Serial.println(settings.mTripleSampling ? "yes" : "no");
+        Serial.print("Actual bit rate: ");
+        Serial.print(settings.actualBitRate());
+        Serial.println(" bit/s");
+        Serial.print("Exact bit rate ? ");
+        Serial.println(settings.exactBitRate() ? "yes" : "no");
+        Serial.print("Sample point: ");
+        Serial.print(settings.samplePointFromBitStart());
+        Serial.println("%");
+    }
+    Serial.println("Configuration CAN OK");
     Serial.println("");
 
     delay(500);
@@ -160,21 +205,26 @@ void TrackController::begin()
 
 bool TrackController::sendMessage(TrackMessage &message)
 {
-    CANMessage can;
+    CANMessage frame;
 
     message.hash = mHash;
-    can.id = (message.prio << 25) | (message.command << 17) | (message.response << 16) | message.hash;
-    can.ext = true;
-    can.len = message.length;
+    frame.id = (static_cast<uint32_t>(message.prio) << 25) | (static_cast<uint32_t>(message.command) << 17) | (static_cast<uint32_t>(message.response) << 16) | message.hash;
+    frame.ext = true;
+    frame.len = message.length;
     for (byte i = 0; i < message.length; i++)
-        can.data[i] = message.data[i];
+        frame.data[i] = message.data[i];
 
     if (mDebug)
     {
         Serial.print("==> 0x");
-        Serial.println(can.id, HEX);
+        Serial.println(frame.id, HEX);
     }
-    return ACAN_ESP32::can.tryToSend(can);
+
+#if defined(ARDUINO_ARCH_ESP32)
+    return ACAN_ESP32::can.tryToSend(frame);
+#elif defined(ARDUINO_ARCH_AVR)
+    return can.tryToSend(frame);
+#endif
 }
 
 /* -------------------------------------------------------------------
@@ -189,12 +239,12 @@ void TrackController::generateHash()
 
     while (!ok)
     {
-        mHash = random(0x10000) & 0xFF7F | 0x0300;
+        mHash = (random(0x10000) & 0xFF7F) | 0x0300;
 
         if (mDebug)
         {
-            Serial.print(F("### Trying new hash "));
-            // TrackMessage::printHex(Serial, mHash, 4);
+            Serial.print("### Trying new hash ");
+            message.printHex(Serial, mHash, 4);
             Serial.println();
         }
 
@@ -203,7 +253,7 @@ void TrackController::generateHash()
 
         sendMessage(message);
 
-        delay(500);
+        delay(mTimeout);
 
         ok = true;
         while (receiveMessage(message))
@@ -224,42 +274,52 @@ void TrackController::generateHash()
 bool TrackController::receiveMessage(TrackMessage &message)
 {
 
-    CANMessage can;
+    CANMessage frame;
 
-    bool result = ACAN_ESP32::can.receive(can);
+#if defined(ARDUINO_ARCH_ESP32)
+    bool result = ACAN_ESP32::can.receive(frame);
+#elif defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
+    bool result = can.receive(frame);
+#endif
 
     if (result)
     {
         if (mDebug)
         {
-
-            Serial.print("ID :");
-            Serial.println(can.id, HEX);
-            Serial.print("EXIDE:");
-            Serial.println(can.ext, HEX);
-            Serial.print("DLC:");
-            Serial.println(can.len, HEX);
-            Serial.print("DATA:");
-            // for (int i = 0; i < can.len; i++)
-            //     TrackMessage::printHex(Serial, can.data[i], 1);
+            Serial.print("<== ID : 0x");
+            Serial.println(frame.id, HEX);
+            Serial.print("EXT : ");
+            Serial.println(frame.ext ? "extended" : "standard");
+            Serial.print("RESP : ");
+            Serial.println((frame.id & 0x10000) >> 16);
+            Serial.print("DLC : ");
+            Serial.println(frame.len);
+            Serial.print("COMMAND : 0x");
+            TrackMessage::printHex(Serial, (frame.id & 0x1FE0000) >> 17, 2);
+            Serial.print("\nDATA : ");
+            for (uint8_t i = 0; i < frame.len; i++)
+            {
+                Serial.print("0x");
+                TrackMessage::printHex(Serial, frame.data[i], 2);
+                if (i < frame.len - 1)
+                    Serial.print(" - ");
+            }
             Serial.println();
         }
 
         message.clear();
-        message.command = (can.id >> 17) & 0xFF;
-        message.hash = can.id & 0xFFFF;
-        message.response = (can.id >> 16) & 0x01;
-        // message.response = bitRead(can.id, 16) || mLoopback;
-        message.length = can.len;
+        message.command = (frame.id >> 17) & 0xFF;
+        message.hash = frame.id & 0xFFFF;
+        message.response = (frame.id >> 16) & 0x01;
+        message.length = frame.len;
 
-        for (int i = 0; i < can.len; i++)
-            message.data[i] = can.data[i];
+        for (uint8_t i = 0; i < frame.len; i++)
+            message.data[i] = frame.data[i];
 
-        if (mDebug)
-        {
-            Serial.print("<== 0x");
-            Serial.println(can.id, HEX);
-        }
+        // if (mDebug) {
+        //   Serial.print("<== 0x");
+        //   Serial.println(frame.id, HEX);
+        // }
     }
     return result;
 }
@@ -278,14 +338,15 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
         if (mDebug)
         {
             Serial.println(F("!!! Send error"));
-            Serial.println(F("!!! Emergency stop"));
-            setPower(false);
+            // Serial.println(F("!!! Emergency stop"));
+            // setPower(false);
             for (;;)
                 ;
         }
     }
 
-    uint32_t time = millis();
+    // uint32_t time = millis();
+    uint64_t time = millis();
 
     /* -- TrackMessage response -- */
 
@@ -310,40 +371,76 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
 
 bool TrackController::setPower(bool power)
 {
+
     TrackMessage message;
-    auto exchange = [this, &message](uint16_t timeout) {
+
+    auto exchange = [this, &message](uint16_t timeout)
+    {
         return exchangeMessage(message, message, timeout);
     };
+
+    /*
+        Arrêt du système ou Démarrage du système
+        Commande système (0x00, dans CAN-ID : 0x00)
+        Sous-commande dans data[4] = 0: Arrêt  du système (0x00)
+        Sous-commande dans data[4] = 1: Démarrage du système (0x01)
+      */
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
+    message.response = false; // bit de réponse désactivé.
+    message.length = 5;
+    message.data[4] = power ? true : false; // Sous-commande Arrêt ou Démarrage
+
+    // /* new version */
+    if (!exchange(mTimeout))
+    {
+        if (mDebug)
+        {
+            Serial.println("Failed to send Power");
+        }
+        return false;
+    }
+    else
+    {
+        if (mDebug)
+        {
+            Serial.print("Power ");
+            Serial.println(power ? true : false);
+        }
+    }
 
     if (power)
     {
         /*
-          Réinitialiser le compteur de réenregistrement MFX
-          Commande système (0x00, dans CAN-ID : 0x00)
-          Sous-commande : Compteur de réenregistrement (0x09)
-        */
+              Réinitialiser le compteur de réenregistrement MFX
+              Commande système (0x00, dans CAN-ID : 0x00)
+              Sous-commande : Compteur de réenregistrement (0x09)
+            */
         message.clear();
         message.prio = 0x00;
         message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
         message.response = false; // bit de réponse desactivé.
         message.length = 7;
         message.data[4] = 0x09; // Sous-commande Compteur de réenregistrement
-        message.data[6] = 0x0D; // Réinitialiser le compteur de réenregistrement à 13.
+        message.data[6] = 0x03; // Réinitialiser le compteur de réenregistrement à 3.
 
         /* old version */
         // exchangeMessage(message, message, 1000);
 
         /* new version */
-        if (!exchange(mTimeout)) {
-            if (mDebug) Serial.println("Failed to reset re-registration counter");
+        if (!exchange(mTimeout))
+        {
+            if (mDebug)
+                Serial.println("Failed to reset re-registration counter");
             return false;
         }
 
         /*
-         Activer ou désactiver le protocole de voie
-         Commande système (0x00, dans CAN-ID : 0x00)
-         Sous-commande : •	Protocole de voie (0x08)
-       */
+             Activer ou désactiver le protocole de voie
+             Commande système (0x00, dans CAN-ID : 0x00)
+             Sous-commande : •	Protocole de voie (0x08)
+           */
         message.clear();
         message.prio = 0x00;
         message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
@@ -356,28 +453,15 @@ bool TrackController::setPower(bool power)
         // exchangeMessage(message, message, 1000);
 
         /* new version */
-       if (!exchange(mTimeout)) {
-            if (mDebug) Serial.println("Failed to activate track protocol");
+        if (!exchange(mTimeout))
+        {
+            if (mDebug)
+                Serial.println("Failed to activate track protocol");
             return false;
         }
     }
-
-    /*
-      Arrêt du système ou Démarrage du système
-      Commande système (0x00, dans CAN-ID : 0x00)
-      Sous-commande dans data[4] = 0: Arrêt  du système (0x00)
-      Sous-commande dans data[4] = 1: Démarrage du système (0x01)
-    */
-    message.clear();
-    message.prio = 0x00;
-    message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)
-    message.response = false; // bit de réponse désactivé.
-    message.length = 5;
-    message.data[4] = power ? true : false; // Sous-commande Arrêt ou Démarrage
-
-    return exchange(mTimeout);
+    return true;
 }
-
 
 /* -------------------------------------------------------------------
    TrackController::systemHalt
@@ -425,11 +509,11 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
 {
     TrackMessage message;
 
-    /* Sur la MS2, le changement de direction est pédédé d'un arret d'urgence de la locomotive
-       Commande systeme 0x00 Sous Commande 0x03
+    /* Sur la MS2, le changement de direction est precede d'un arret d'urgence de la locomotive
+         Commande systeme 0x00 Sous Commande 0x03
 
-       Cet arret d'urgence est remplace ici par une vitesse 0
-    */
+         Cet arret d'urgence est remplace ici par une vitesse 0
+      */
     // message.clear();
     // message.command = 0x00;
     // message.length = 5;
@@ -437,14 +521,14 @@ bool TrackController::setLocoDirection(const uint16_t address, byte direction)
     // message.data[3] = (address & 0x00FF);
     // message.data[4] = 0x03;
 
-    message.clear();
-    message.command = 0x04; // Commande : LocVitesse 
-    message.length = 6;
-    message.data[2] = (address & 0xFF00) >> 8;
-    message.data[3] = (address & 0x00FF);
-    message.data[5] = 0;
+    // message.clear();
+    // message.command = 0x04;  // Commande : LocVitesse
+    // message.length = 6;
+    // message.data[2] = (address & 0xFF00) >> 8;
+    // message.data[3] = (address & 0x00FF);
+    // message.data[5] = 0;
 
-    exchangeMessage(message, message, mTimeout);
+    // return exchangeMessage(message, message, mTimeout);
 
     message.clear();
     message.command = 0x05;
@@ -681,7 +765,7 @@ bool TrackController::getAccessory(const uint16_t address, byte *position, byte 
 /* -------------------------------------------------------------------
    TrackController::getVersion
 -------------------------------------------------------------------  */
-bool TrackController::getVersion(byte *high, byte *low)
+bool TrackController::getVersion()
 {
     bool result = false;
 
@@ -689,19 +773,30 @@ bool TrackController::getVersion(byte *high, byte *low)
 
     message.clear();
     message.command = 0x18;
-    sendMessage(message);
 
-    delay(500);
-
-    while (receiveMessage(message))
+    if (exchangeMessage(message, message, mTimeout))
     {
-        if (message.command = 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10)
-        {
-            *high = message.data[4];
-            *low = message.data[5];
-            result = true;
-        }
+        Serial.print("version : ");
+        Serial.print(message.data[4]);
+        Serial.println(message.data[5]);
+        return result = true;
     }
+
+    // sendMessage(message);
+
+    // delay(500);
+    // message.clear();
+    // while (receiveMessage(message)) {
+    //   if (message.command == 0x18 && message.response) {
+    //     //if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10) {
+    //     // *high = message.data[4];
+    //     // *low = message.data[5];
+    //     Serial.print("version : ");
+    //     Serial.print(message.data[4]);
+    //     Serial.println(message.data[5]);
+    //     result = true;
+    //   }
+    // }
     return result;
 }
 
