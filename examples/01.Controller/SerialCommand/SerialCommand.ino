@@ -16,15 +16,25 @@
  */
 
 /*
- * This exemple is the update of examples/01.Controller/CV/CV_new.ino
+ * This exemple is the update of examples/01.Controller/SerialCommand/SerialCommand.ino
  */
+
+/*
+* Exemple :
+    power 1
+    speed 16391 100
+    function 16391 0 1
+*/
 
 #include "Config.h"
 #include "TrackController.h"
 
 const bool DEBUG = false;
+const uint64_t TIMEOUT = 500; // ms
+const uint16_t HASH = 0x00;
+const bool LOOPBACK = false;
 
-TrackController ctrl(0xDF24, DEBUG);
+TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
 
 void setup()
 {
