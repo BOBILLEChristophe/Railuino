@@ -22,7 +22,7 @@
 #include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
 #include <Arduino.h>
 #elif defined ARDUINO_ARCH_AVR
-#include <ACAN2515.h>. // https://github.com/pierremolinaro/acan2515.git
+#include <ACAN2515.h> // https://github.com/pierremolinaro/acan2515.git
 static const uint32_t QUARTZ_FREQUENCY = 16UL * 1000UL * 1000UL; // 16 MHz
 static const byte MCP2515_INT = 2;                               // INT output of MCP2515 (adapt to your design)
 static const byte MCP2515_CS = 10;                               // CS input of MCP2515 (adapt to your design)
@@ -64,14 +64,15 @@ TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut)
         Serial.println("### Creating controller with param");
 }
 
-// TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback) : mHash(hash),
-//                                                                                              mDebug(debug),
-//                                                                                              mLoopback(loopback),
-//                                                                                              mTimeout(timeOut)
-// {
-//     if (mDebug)
-//         Serial.println("### Creating controller with param");
-// }
+TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback)
+    : mHash(hash),
+      mDebug(debug),
+      mLoopback(loopback),
+      mTimeout(timeOut)
+{
+    if (mDebug)
+        Serial.println("### Creating controller with param");
+}
 
 TrackController::~TrackController() // Destructeur
 {
@@ -416,7 +417,7 @@ bool TrackController::setPower(bool power)
               Réinitialiser le compteur de réenregistrement MFX
               Commande système (0x00, dans CAN-ID : 0x00)
               Sous-commande : Compteur de réenregistrement (0x09)
-            */
+        */
         message.clear();
         message.prio = 0x00;
         message.command = 0x00;   // Commande système (0x00, dans CAN-ID : 0x00)

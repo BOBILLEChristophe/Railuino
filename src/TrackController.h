@@ -78,13 +78,13 @@
     * flag and changing the default exchangeMessage timeout.
     * A zero hash will result in a unique hash begin generated.
     */
-   TrackController(uint16_t hash, bool debug, uint64_t timeOut = 1000);
+   TrackController(uint16_t hash, bool debug, uint64_t timeOut);
  
    /**
     * Creates a new TrackController with the given hash and debugging
     * flag. A zero hash will result in a unique hash begin generated.
     */
-   // TrackController(uint16_t hash, bool debug, uint64_t timeOut = 1000, bool loopback = false);
+   TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback);
    /**
     * Is called when a TrackController is being destroyed. Does the
     * necessary cleanup. No need to call this manually.
