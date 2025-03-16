@@ -849,7 +849,7 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
 
 void TrackController::handleUserCommands(String command)
 {
-    if (command.startsWith("power "))
+    if (command.startsWith("power ")) // EX power 1 (on); power 0 (off)
     {
         bool power = command.substring(6).toInt();
         setPower(power);
@@ -865,13 +865,13 @@ void TrackController::handleUserCommands(String command)
         uint8_t direction = command.substring(16).toInt();
         setLocoDirection(address, direction);
     }
-    else if (command.startsWith("speed "))
+    else if (command.startsWith("speed ")) // Ex speed 16391 100; 16391 = 0x40 | 0x07; 100 = speed/1000
     {
         uint16_t address = command.substring(6, 11).toInt();
         uint16_t speed = command.substring(12).toInt();
         setLocoSpeed(address, speed);
     }
-    else if (command.startsWith("function "))
+    else if (command.startsWith("function ")) // Ex function 16391 0 1; 16391 = 0x40 | 0x07; 0 = feux; 1 = true
     {
         uint16_t address = command.substring(9, 14).toInt();
         uint8_t function = command.substring(15, 16).toInt();

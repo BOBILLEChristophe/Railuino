@@ -33,7 +33,6 @@
  
  TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
  
- 
  void setup() {
    Serial.begin(115200);
    while (!Serial);
