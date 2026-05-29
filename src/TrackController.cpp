@@ -4,6 +4,7 @@
  *
  * Copyright (C) 2012 Joerg Pleumann
  * Copyright (C) 2024 christophe bobille
+ * Copyright (C) 2026 Uwe Monreal
  *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
@@ -31,6 +32,43 @@ ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
 
 static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate = 250Kbit/s
 
+#define SIZE 32
+
+CANMessage _buffer[SIZE];
+
+volatile uint16_t posRead = 0;
+
+volatile uint16_t posWrite = 0;
+
+volatile bool lastOpWasWrite = false;
+
+bool dequeue(CANMessage *p) {
+	noInterrupts();
+
+	if (posWrite == posRead && !lastOpWasWrite) {
+		interrupts();
+		return false;
+	}
+
+	memcpy(p, &_buffer[posRead], sizeof(CANMessage));
+/*
+	p->id=_buffer[posRead].id;
+	p->length=_buffer[posRead].length;
+
+	for (int i = 0; i < p->length; i++) {
+		p->data[i] = _buffer[posRead].data[i];
+	}
+*/
+	//*p = _buffer[posRead];
+
+	posRead = (posRead + 1) % SIZE;
+	lastOpWasWrite = false;
+
+	interrupts();
+
+	return true;
+}
+
 /* -------------------------------------------------------------------
    TrackController (constructor / destructor)
 -------------------------------------------------------------------  */
@@ -41,12 +79,19 @@ TrackController::TrackController()
       mLoopback(false),
       mTimeout(1000)
 {
-    if (mDebug)
-        Serial.println("### Creating controller");
 }
+
 TrackController::TrackController(uint64_t timeOut)
     : mHash(0),
       mDebug(false),
+      mLoopback(false),
+      mTimeout(timeOut)
+{
+}
+
+TrackController::TrackController(uint64_t timeOut, bool debug)
+    : mHash(0),
+      mDebug(debug),
       mLoopback(false),
       mTimeout(timeOut)
 {
@@ -179,6 +224,9 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
         message.length = 5;
         message.data[4] = 0x11;
         sendMessage(message);
+
+        if (exchangeMessage(message, message, mTimeout))
+            Serial.println("Ok 0x11");
     }
 
     if (mHash == 0)
@@ -189,16 +237,16 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
    TrackController::end
 -------------------------------------------------------------------  */
 
-// void TrackController::end() {
+ void TrackController::end() {
 // 	detachInterrupt(CAN_INT);
 
-// 	can_t t;
+ 	CANMessage t;
 
-// 	boolean b = dequeue(&t);
-// 	while (b) {
-// 		b = dequeue(&t);
-// 	}
-// }
+ 	boolean b = dequeue(&t);
+ 	while (b) {
+ 		b = dequeue(&t);
+ 	}
+ }
 
 /* -------------------------------------------------------------------
    TrackController::sendMessage
@@ -262,6 +310,15 @@ bool TrackController::receiveMessage(TrackMessage &message)
 
     if (result)
     {
+        message.clear();
+        message.command = (frame.id >> 17) & 0xFF;
+        message.hash = frame.id & 0xFFFF;
+        message.response = (frame.id >> 16) & 0x01;
+        message.length = frame.len;
+
+        for (uint8_t i = 0; i < frame.len; i++)
+            message.data[i] = frame.data[i];
+
         if (mDebug)
         {
             Serial.print("==> ID : 0x");
@@ -284,15 +341,6 @@ bool TrackController::receiveMessage(TrackMessage &message)
             }
             Serial.print("\n------------------------------------------------------------------\n");
         }
-
-        message.clear();
-        message.command = (frame.id >> 17) & 0xFF;
-        message.hash = frame.id & 0xFFFF;
-        message.response = (frame.id >> 16) & 0x01;
-        message.length = frame.len;
-
-        for (uint8_t i = 0; i < frame.len; i++)
-            message.data[i] = frame.data[i];
 
         // if (mDebug) {
         //   Serial.print("<== 0x");
@@ -333,7 +381,7 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
         in.clear();
         boolean result = receiveMessage(in);
 
-        if (result && in.command == command && in.response)
+        if (result && in.command == command && in.response&& in.length > 4)
             return true;
     }
 
@@ -384,6 +432,93 @@ void TrackController::generateHash()
         Serial.print(F("### New hash looks good"));
         Serial.print(F("\n------------------------------------------------------------------\n"));
     }
+}
+
+/* -------------------------------------------------------------------
+   TrackController::locomotive Discovery
+-------------------------------------------------------------------  */
+
+bool TrackController::locoDiscovery()
+{
+    TrackMessage message;
+    Serial.print("###Start discovery");
+    Serial.print(F("\n------------------------------------------------------------------\n"));
+
+    // 2.1 Commande : Système Arrêt
+    // message.clear();
+    // message.prio = 0x00;
+    // message.command = 0x00;
+    // message.length = 5;
+    // message.data[4] = 0x00; // Arrêt du système
+    // sendMessage(message);
+    // delay(1000);
+
+    // Bootloader CAN
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x1B;
+    message.length = 5;
+    message.data[4] = 0x11;
+    sendMessage(message);
+    delay(1000);
+
+    // 2.10 Commande : Système MFX Définir le compteur de nouvelles inscriptions
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x00;
+    message.length = 7;
+    message.data[4] = 0x09;
+    message.data[6] = 0x07;
+    sendMessage(message);
+    delay(1000);
+
+    // 3.3 Commande : MFX Verify (pour provoquer un UnBIND)
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x03;
+    message.length = 6;
+    sendMessage(message);
+    delay(1000);
+
+    // 2.1 Commande : Système Go
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x00;
+    message.length = 5;
+    message.data[4] = 0x01; // Système Go
+    sendMessage(message);
+    delay(1000);
+
+    // 3.1 Ordre de mission : Locomotive Discovery
+    // message.clear();
+    // message.prio = 0x00;
+    // message.command = 0x00;
+    // message.length = 1;
+    // message.data[0] = 0x20; // MFX protocole;
+
+    message.clear();
+    message.prio = 0x00;
+    message.command = 0x01;
+    message.length = 5;
+    message.data[0] = 0xF9; // MFX protocole;
+    message.data[1] = 0xE6; // MFX protocole;
+    message.data[2] = 0x1; // MFX protocole;
+    message.data[3] = 0x20; // MFX protocole;
+    message.data[4] = 0x20; // MFX protocole;
+
+    //sendMessage(message);
+
+    if (exchangeMessage(message, message, 60UL * 1000UL))
+    {
+        Serial.print("UID : 0x");
+        message.printHex(Serial, message.data[0], 2);
+        message.printHex(Serial, message.data[1], 2);
+        message.printHex(Serial, message.data[2], 2);
+        message.printHex(Serial, message.data[3], 2);
+        return true;
+    }
+    else
+        return false;
 }
 
 /* -------------------------------------------------------------------
@@ -629,14 +764,17 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
     message.data[5] = lowByte(number);
     message.data[6] = 0x01;
 
-    if (exchangeMessage(message, message, mTimeout))
+    if (exchangeMessage(message, message, 10000))
     {
-        *value = message.data[6];
+        value[0] = message.data[6];
         return true;
     }
     else
+        {
         return false;
+        }
 }
+
 
 /* -------------------------------------------------------------------
    TrackController::getLocoFunction
@@ -787,7 +925,7 @@ bool TrackController::getAccessory(const uint16_t address, byte *position, byte 
 /* -------------------------------------------------------------------
    TrackController::getVersion
 -------------------------------------------------------------------  */
-bool TrackController::getVersion()
+bool TrackController::getVersion(byte *high, byte *low)
 {
     bool result = false;
 
@@ -806,19 +944,19 @@ bool TrackController::getVersion()
 
     // sendMessage(message);
 
-    // delay(500);
-    // message.clear();
-    // while (receiveMessage(message)) {
+     delay(500);
+     message.clear();
+     while (receiveMessage(message)) {
     //   if (message.command == 0x18 && message.response) {
-    //     //if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10) {
-    //     // *high = message.data[4];
-    //     // *low = message.data[5];
+         if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10) {
+          (*high) = message.data[4];
+          (*low) = message.data[5];
     //     Serial.print("version : ");
     //     Serial.print(message.data[4]);
     //     Serial.println(message.data[5]);
-    //     result = true;
-    //   }
-    // }
+         result = true;
+       }
+     }
     return result;
 }
 

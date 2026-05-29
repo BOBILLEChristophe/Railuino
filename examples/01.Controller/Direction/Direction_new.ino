@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2012 Joerg Pleumann
  * Copyright (C) 2024 Christophe Bobille
- * 
+ *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
  * version 1.0, as published by the Creative Commons Organisation.
@@ -16,10 +16,9 @@
  */
 
 /*
-* This exemple is the update of examples/01.Controller/Direction/Direction.ino
-*/
+ * This exemple is the update of examples/01.Controller/Direction/Direction.ino
+ */
 
- 
 #include "Config.h"
 #include "TrackController.h"
 
@@ -27,42 +26,46 @@ const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
 
 const uint16_t PAUSE = 10UL * 1000UL;
 
-const bool DEBUG = false;
+const bool DEBUG = true;
 const uint64_t TIMEOUT = 500; // ms
 const uint16_t HASH = 0x00;
 const bool LOOPBACK = false;
 
-TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);  // Instance de la classe TrackController, création de l'objet ctrl.
+TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
 
-
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  while (!Serial);
-  
-  ctrl.begin();
+  while (!Serial)
+    ;
+
+  // ctrl ESP32
+  ctrl.begin(21, 22); // Lancement du contrôleur
   Serial.println("Power on");
   ctrl.setPower(true);
   Serial.println("Headlights on");
   ctrl.setLocoFunction(LOCO, 0, 1);
 }
 
-void loop() {
+void loop()
+{
   byte b;
-  
+
   ctrl.setLocoDirection(LOCO, DIR_FORWARD);
-  if (ctrl.getLocoDirection(LOCO, &b)) {
+  if (ctrl.getLocoDirection(LOCO, &b))
+  {
     Serial.print("Direction is ");
     Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
   }
-  
+
   delay(PAUSE);
-  
+
   ctrl.setLocoDirection(LOCO, DIR_REVERSE);
-  if (ctrl.getLocoDirection(LOCO, &b)) {
+  if (ctrl.getLocoDirection(LOCO, &b))
+  {
     Serial.print("Direction is ");
     Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
   }
-  
+
   delay(PAUSE);
 }
-

@@ -34,7 +34,8 @@
    Serial.begin(115200);
    while (!Serial);
    
-   ctrl.begin();                    // Lancement du contrôleur
+   // ctrl ESP32
+   ctrl.begin(21, 22);              // Lancement du contrôleur
  } 
  
  void loop() {

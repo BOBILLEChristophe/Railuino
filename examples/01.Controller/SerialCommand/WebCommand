@@ -23,8 +23,8 @@ const gpio_num_t can_tx_pin = GPIO_NUM_23;
 
 //TrackController ctrl;                   // Instance without parameters
 //TrackController ctrl(500);              // Instance by changing the default exchangeMessage timeout from 1000ms to 500ms
-//TrackController ctrl(0xDF24, DEBUG);    // Instance with hash, debug and defaut exchangeMessage timeout = 1000
-TrackController ctrl(0xDF24, DEBUG, 500); // Instance with hash, debug and exchangeMessage timeout = 500
+TrackController ctrl(0xDF24, DEBUG);      // Instance with hash, debug and defaut exchangeMessage timeout = 1000
+//TrackController ctrl(0xDF24, DEBUG, 500); // Instance with hash, debug and exchangeMessage timeout = 500
 
 
 
