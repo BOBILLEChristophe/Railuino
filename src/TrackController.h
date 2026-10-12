@@ -133,8 +133,8 @@ public:
   // void begin(const gpio_num_t can_rx_pin = GPIO_NUM_5,
   //            const gpio_num_t can_tx_pin = GPIO_NUM_4);
 
-  void begin(const byte can_rx_pin = 5,
-             const byte can_tx_pin = 4);
+  void begin(const byte can_rx_pin = CAN_RX_PIN,
+             const byte can_tx_pin = CAN_TX_PIN);
 
   /**
    * Generates a new hash and makes sure it does not conflict

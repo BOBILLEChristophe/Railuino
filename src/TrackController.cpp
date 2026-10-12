@@ -42,31 +42,33 @@ volatile uint16_t posWrite = 0;
 
 volatile bool lastOpWasWrite = false;
 
-bool dequeue(CANMessage *p) {
-	noInterrupts();
+bool dequeue(CANMessage *p)
+{
+    noInterrupts();
 
-	if (posWrite == posRead && !lastOpWasWrite) {
-		interrupts();
-		return false;
-	}
+    if (posWrite == posRead && !lastOpWasWrite)
+    {
+        interrupts();
+        return false;
+    }
 
-	memcpy(p, &_buffer[posRead], sizeof(CANMessage));
-/*
-	p->id=_buffer[posRead].id;
-	p->length=_buffer[posRead].length;
+    memcpy(p, &_buffer[posRead], sizeof(CANMessage));
+    /*
+        p->id=_buffer[posRead].id;
+        p->length=_buffer[posRead].length;
 
-	for (int i = 0; i < p->length; i++) {
-		p->data[i] = _buffer[posRead].data[i];
-	}
-*/
-	//*p = _buffer[posRead];
+        for (int i = 0; i < p->length; i++) {
+            p->data[i] = _buffer[posRead].data[i];
+        }
+    */
+    //*p = _buffer[posRead];
 
-	posRead = (posRead + 1) % SIZE;
-	lastOpWasWrite = false;
+    posRead = (posRead + 1) % SIZE;
+    lastOpWasWrite = false;
 
-	interrupts();
+    interrupts();
 
-	return true;
+    return true;
 }
 
 /* -------------------------------------------------------------------
@@ -237,16 +239,18 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
    TrackController::end
 -------------------------------------------------------------------  */
 
- void TrackController::end() {
-// 	detachInterrupt(CAN_INT);
+void TrackController::end()
+{
+    // 	detachInterrupt(CAN_INT);
 
- 	CANMessage t;
+    CANMessage t;
 
- 	boolean b = dequeue(&t);
- 	while (b) {
- 		b = dequeue(&t);
- 	}
- }
+    boolean b = dequeue(&t);
+    while (b)
+    {
+        b = dequeue(&t);
+    }
+}
 
 /* -------------------------------------------------------------------
    TrackController::sendMessage
@@ -379,9 +383,19 @@ bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint1
     while (millis() < time + timeout)
     {
         in.clear();
+
         boolean result = receiveMessage(in);
 
-        if (result && in.command == command && in.response&& in.length > 4)
+        if (result)
+        {
+            Serial.println("=== TRAME CAN RECUE ===");
+            in.printTo(Serial);
+        }
+
+        if (result && in.command == command && in.response && in.length > 4)
+            return true;
+
+        if (result && in.command == command && in.response && in.length > 4)
             return true;
     }
 
@@ -502,11 +516,11 @@ bool TrackController::locoDiscovery()
     message.length = 5;
     message.data[0] = 0xF9; // MFX protocole;
     message.data[1] = 0xE6; // MFX protocole;
-    message.data[2] = 0x1; // MFX protocole;
+    message.data[2] = 0x1;  // MFX protocole;
     message.data[3] = 0x20; // MFX protocole;
     message.data[4] = 0x20; // MFX protocole;
 
-    //sendMessage(message);
+    // sendMessage(message);
 
     if (exchangeMessage(message, message, 60UL * 1000UL))
     {
@@ -770,11 +784,10 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
         return true;
     }
     else
-        {
+    {
         return false;
-        }
+    }
 }
-
 
 /* -------------------------------------------------------------------
    TrackController::getLocoFunction
@@ -944,19 +957,21 @@ bool TrackController::getVersion(byte *high, byte *low)
 
     // sendMessage(message);
 
-     delay(500);
-     message.clear();
-     while (receiveMessage(message)) {
-    //   if (message.command == 0x18 && message.response) {
-         if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10) {
-          (*high) = message.data[4];
-          (*low) = message.data[5];
-    //     Serial.print("version : ");
-    //     Serial.print(message.data[4]);
-    //     Serial.println(message.data[5]);
-         result = true;
-       }
-     }
+    delay(500);
+    message.clear();
+    while (receiveMessage(message))
+    {
+        //   if (message.command == 0x18 && message.response) {
+        if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10)
+        {
+            (*high) = message.data[4];
+            (*low) = message.data[5];
+            //     Serial.print("version : ");
+            //     Serial.print(message.data[4]);
+            //     Serial.println(message.data[5]);
+            result = true;
+        }
+    }
     return result;
 }
 

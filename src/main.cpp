@@ -15,10 +15,16 @@ const uint64_t TIMEOUT = 500; // ms
 const uint16_t HASH = 0xDF24;
 const bool LOOPBACK = false;
 
-//TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
-TrackController ctrl(HASH);
-const char *ssid = "**********";
-const char *password = "**********";
+TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);
+// WiFi credentials live in src/secrets.h, which is ignored by Git.
+// Copy src/secrets.h.example to src/secrets.h and fill it in.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Copiez src/secrets.h.example en src/secrets.h et renseignez votre WiFi / Copy src/secrets.h.example to src/secrets.h"
+#endif
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
 
 IPAddress ip(192, 168, 1, 103);
 IPAddress gateway(192, 168, 1, 254);
