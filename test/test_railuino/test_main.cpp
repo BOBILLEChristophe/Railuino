@@ -495,6 +495,29 @@ void test_mfx_observer_learns_from_the_ms2()
     TEST_ASSERT_TRUE(bus->sent.empty());
 }
 
+void test_mfx_assign_seeds_the_table()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl);
+    mfx.begin();
+
+    // From a Loc-ID or a SID; 0 is refused.
+    TEST_ASSERT_TRUE(mfx.assign(0xFFE9B194UL, 0x4007));
+    TEST_ASSERT_EQUAL_HEX16(0x4007, mfx.locIdOf(0xFFE9B194UL));
+    TEST_ASSERT_TRUE(mfx.assign(0x11223344UL, 8));
+    TEST_ASSERT_EQUAL_HEX16(0x4008, mfx.locIdOf(0x11223344UL));
+    TEST_ASSERT_FALSE(mfx.assign(0, 5));
+    TEST_ASSERT_FALSE(mfx.assign(0x55667788UL, 0));
+    TEST_ASSERT_FALSE(mfx.assign(0x55667788UL, 0x4000));
+    TEST_ASSERT_EQUAL_UINT8(2, mfx.size());
+
+    // A later Bind of the MS2 wins.
+    bus->rx.push_back(mfxFrame(0x02, false, 0x8B23, 0xFFE9B194UL, 9));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4009, mfx.locIdOf(0xFFE9B194UL));
+    TEST_ASSERT_TRUE(bus->sent.empty());
+}
+
 void test_mfx_observer_ignores_discovery_and_verify_sid_0()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -646,6 +669,7 @@ int main()
     RUN_TEST(test_command_parser);
     RUN_TEST(test_command_parser_reports_no_answer);
     RUN_TEST(test_mfx_observer_learns_from_the_ms2);
+    RUN_TEST(test_mfx_assign_seeds_the_table);
     RUN_TEST(test_mfx_observer_ignores_discovery_and_verify_sid_0);
     RUN_TEST(test_mfx_master_discovery_bind_verify);
     RUN_TEST(test_mfx_master_gives_up_after_3_tries);

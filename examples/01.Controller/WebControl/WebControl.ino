@@ -2,6 +2,12 @@
  * Web interface for the layout (ESP32 only): power, speed, direction,
  * functions. The pages are in data/: upload them with
  * PlatformIO > Platform > Upload Filesystem Image.
+ *
+ * MFX locomotives can be given by their UID in index.html
+ * (data-uid="FFE9B194"): the address is then looked up in an MfxRegistry
+ * that follows the registrations made by the MS2, so the page keeps
+ * working when the MS2 gives the locomotive a new SID. data-address is
+ * used until the registry knows the UID. GET /locos lists the table.
  * Interface web du réseau (ESP32 uniquement). Les pages sont dans data/ :
  * les téléverser avec PlatformIO > Platform > Upload Filesystem Image.
  */
@@ -30,6 +36,9 @@ const uint16_t HASH = 0xDF24;
 const bool LOOPBACK = false;
 
 TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);
+
+// MFX table (UID -> address), learned from the MS2 and kept in NVS.
+MfxRegistry mfx(ctrl);
 
 // WiFi credentials live in secrets.h (same folder), ignored by Git.
 // Copy secrets.h.example to secrets.h and fill it in.
@@ -145,6 +154,49 @@ void handleFavinco()
   file.close();
 }
 
+// Address of the locomotive of a request: from its UID when the page
+// gives one and the registry knows it, otherwise from "address". A UID
+// not known yet is recorded with the given address; the next Bind of the
+// MS2 corrects it if needed. Returns 0 if no address can be found.
+uint16_t requestAddress()
+{
+  const uint16_t address = server.hasArg("address") ? server.arg("address").toInt() : 0;
+  if (!server.hasArg("uid"))
+    return address;
+
+  const uint32_t uid = strtoul(server.arg("uid").c_str(), nullptr, 16);
+  const uint16_t locId = mfx.locIdOf(uid);
+  if (locId != 0)
+    return locId;
+  if (address != 0)
+    mfx.assign(uid, address);
+  return address;
+}
+
+void sendResult(bool ok, const char *text, uint16_t address)
+{
+  String answer = String(text) + " (" + String(address) + ")";
+  server.send(ok ? 200 : 503, "text/plain", ok ? answer : String("No answer from the layout") + " (" + String(address) + ")");
+}
+
+// GET /locos: the MFX table, as JSON.
+void handleLocos()
+{
+  String json = "[";
+  for (uint8_t i = 0; i < mfx.size(); i++)
+  {
+    const MfxRegistry::Entry &e = mfx.entry(i);
+    char uid[9];
+    snprintf(uid, sizeof(uid), "%08lX", static_cast<unsigned long>(e.uid));
+    if (i > 0)
+      json += ",";
+    json += "{\"uid\":\"" + String(uid) + "\",\"address\":" + String(0x4000 + e.sid) +
+            ",\"state\":\"" + MfxRegistry::stateName(e.state) + "\"}";
+  }
+  json += "]";
+  server.send(200, "application/json", json);
+}
+
 void handleSetPower()
 {
   auto togglePower = [&]() -> bool
@@ -166,83 +218,65 @@ void handleSetPower()
 
 void handleSetStop()
 {
-  if (server.hasArg("address"))
+  const uint16_t address = requestAddress();
+  if (address == 0)
   {
-    uint16_t address = server.arg("address").toInt();
-    const bool ok = ctrl.setLocoSpeed(address, 0);
-    if (ok)
-      server.send(200, "text/plain", "Stop");
-    else
-      server.send(400, "text/plain", "Server error");
+    server.send(400, "text/plain", "Address parameter missing");
+    return;
   }
+  sendResult(ctrl.setLocoSpeed(address, 0), "Stop", address);
 }
 
 void handleSetSystemHalt()
 {
-
-  if (server.hasArg("address"))
-  {
-    uint16_t address = server.arg("address").toInt();
-    const bool ok = ctrl.systemHalt(address);
-    if (ok)
-      server.send(200, "text/plain", "SystemHalt");
-    else
-      server.send(200, "text/plain", " Server erro#");
-  }
-  else
-    server.send(400, "text/plain", "Address parameter missing");
+  sendResult(ctrl.systemHalt(0), "SystemHalt", 0);
 }
 
 void handleSetDirection()
 {
-  if (server.hasArg("address"))
+  const uint16_t address = requestAddress();
+  if (address == 0)
   {
-    uint16_t address = server.arg("address").toInt();
-    ctrl.toggleLocoDirection(address);
-    server.send(200, "text/plain", "Direction toggled");
-  }
-  else
     server.send(400, "text/plain", "Address parameter missing");
+    return;
+  }
+  sendResult(ctrl.toggleLocoDirection(address), "Direction toggled", address);
 }
 
 void handleSetSpeed()
 {
-  uint16_t address = 0;
-  uint16_t speed = 0;
-  if (server.hasArg("address") && server.hasArg("speed"))
+  const uint16_t address = requestAddress();
+  if (address == 0 || !server.hasArg("speed"))
   {
-    address = server.arg("address").toInt();
-    speed = server.arg("speed").toInt();
-    ctrl.setLocoSpeed(address, speed);
-    server.send(200, "text/plain", "Speed set");
-  }
-  else
     server.send(400, "text/plain", "Speed parameter missing");
+    return;
+  }
+  const uint16_t speed = server.arg("speed").toInt();
+  sendResult(ctrl.setLocoSpeed(address, speed), "Speed set", address);
 }
 
 void handleSetAddress()
 {
-  if (server.hasArg("address"))
+  const uint16_t address = requestAddress();
+  if (address == 0)
   {
-    uint16_t address = server.arg("address").toInt();
-    server.send(200, "text/plain", "Address set");
-  }
-  else
     server.send(400, "text/plain", "Address parameter missing");
+    return;
+  }
+  sendResult(true, "Address set", address);
 }
 
 void handleSetFunction()
 {
-  if (server.hasArg("address") && server.hasArg("function") && server.hasArg("power"))
+  const uint16_t address = requestAddress();
+  if (address == 0 || !server.hasArg("function") || !server.hasArg("power"))
   {
-    uint16_t address = server.arg("address").toInt();
-    uint8_t function = server.arg("function").toInt();
-    uint8_t power = server.arg("power").toInt();
-    ctrl.setLocoFunction(address, function, power);
-    server.send(200, "text/plain", "Function set");
-  }
-  else
     server.send(400, "text/plain", "Function parameter missing");
+    return;
+  }
+  const uint8_t function = server.arg("function").toInt();
+  const uint8_t power = server.arg("power").toInt();
+  sendResult(ctrl.setLocoFunction(address, function, power), "Function set", address);
 }
 
 void handleNotFound()
@@ -286,13 +320,19 @@ void setup()
   server.on("/setSpeed", HTTP_POST, handleSetSpeed);
   server.on("/setAddress", HTTP_POST, handleSetAddress);
   server.on("/setFunction", HTTP_POST, handleSetFunction);
+  server.on("/locos", HTTP_GET, handleLocos);
   server.onNotFound(handleNotFound);
 
   server.begin();
   ctrl.begin(CAN_RX, CAN_TX);
+
+  mfx.setAutoSave(true); // the table survives a restart
+  mfx.begin();           // observer: learns the addresses given by the MS2
+  mfx.printTo(Serial);
 }
 
 void loop()
 {
   server.handleClient();
+  ctrl.poll(); // MS2 messages -> MFX table
 }

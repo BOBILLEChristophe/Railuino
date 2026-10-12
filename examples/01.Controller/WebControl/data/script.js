@@ -4,8 +4,10 @@ let selectedLoco = null;
 
 // Classe Loco
 class Loco {
-    constructor(address) {
+    constructor(address, uid) {
         this.address = address;
+        this.uid = uid; // UID MFX (hexadécimal) ou null
+
         this.speed = 0;
         this.direction = 0;
         this.functions = Array(10).fill(false);
@@ -22,12 +24,41 @@ class Loco {
     setFunction(index, state) {
         this.functions[index] = state;
     }
+
+    // Paramètres de requête : l'UID d'abord (le serveur en déduit l'adresse
+    // actuelle), l'adresse en secours.
+    params() {
+        return (this.uid ? `uid=${this.uid}&` : '') + `address=${this.address}`;
+    }
+
+    // Nom affiché dans le journal
+    label() {
+        return this.uid ? `UID ${this.uid}` : `address ${this.address}`;
+    }
+}
+
+// Clé d'une locomotive : son UID s'il est donné, sinon son adresse
+function locoKey(button) {
+    return button.getAttribute('data-uid') || button.getAttribute('data-address');
+}
+
+// Envoie une commande et affiche la réponse du serveur (elle contient
+// l'adresse réellement utilisée).
+function send(url, message) {
+    return fetch(url, { method: 'POST' })
+        .then(response => response.text().then(text => {
+            addLogMessage(response.ok ? `${message} - ${text}` : `Error: ${text}`);
+            return response.ok;
+        }))
+        .catch(() => {
+            addLogMessage('No answer from the server');
+            return false;
+        });
 }
 
 // Créer des instances de Loco pour chaque bouton image
 document.querySelectorAll('.address-button').forEach(button => {
-    const address = button.getAttribute('data-address');
-    locos[address] = new Loco(address);
+    locos[locoKey(button)] = new Loco(button.getAttribute('data-address'), button.getAttribute('data-uid'));
 });
 
 // Fonction pour mettre à jour l'affichage avec les valeurs de la locomotive sélectionnée
@@ -82,58 +113,103 @@ document.getElementById('powerButton').addEventListener('click', () => {
 
 document.getElementById('systemHaltButton').addEventListener('click', () => {
     if (selectedLoco) {
-        fetch(`/setSystemHalt?address=0x0000`, { method: 'POST' })
-            .then(() => {
-                document.getElementById('speedSlider').value = 0;
-                updateSpeedValue(0);
-                selectedLoco.setSpeed(0);
-                addLogMessage(`System Halt`);
-            });
+        cancelPendingSpeed();
+        document.getElementById('speedSlider').value = 0;
+        updateSpeedValue(0);
+        selectedLoco.setSpeed(0);
+        send(`/setSystemHalt`, 'System Halt');
     }
 });
 
 document.getElementById('stopButton').addEventListener('click', () => {
     if (selectedLoco) {
-        fetch(`/setStop?address=${selectedLoco.address}`, { method: 'POST' })
-            .then(() => {
-                document.getElementById('speedSlider').value = 0;
-                updateSpeedValue(0);
-                selectedLoco.setSpeed(0);
-                addLogMessage(`Stop for address ${selectedLoco.address}`);
-            });
+        cancelPendingSpeed();
+        document.getElementById('speedSlider').value = 0;
+        updateSpeedValue(0);
+        selectedLoco.setSpeed(0);
+        send(`/setStop?${selectedLoco.params()}`, `Stop for ${selectedLoco.label()}`);
     }
 });
 
 document.getElementById('directionButton').addEventListener('click', () => {
     if (selectedLoco) {
         selectedLoco.direction = 1 - selectedLoco.direction; // Change de direction
-        fetch(`/setDirection?address=${selectedLoco.address}`, { method: 'POST' })
-            .then(() => {
-                document.getElementById('speedSlider').value = 0;
-                updateSpeedValue(0);
-                addLogMessage(`Direction change for address ${selectedLoco.address}`);
-            });
+        cancelPendingSpeed();
+        // La centrale arrête la loco au changement de sens
+        document.getElementById('speedSlider').value = 0;
+        updateSpeedValue(0);
+        selectedLoco.setSpeed(0);
+        send(`/setDirection?${selectedLoco.params()}`, `Direction change for ${selectedLoco.label()}`);
     }
 });
 
-document.getElementById('speedSlider').addEventListener('input', (event) => {
+// Curseur de vitesse : au plus une commande toutes les SPEED_INTERVAL_MS
+// pendant le déplacement, et toujours la valeur finale au relâchement.
+const SPEED_INTERVAL_MS = 100;
+let lastSpeedSent = 0;   // instant du dernier envoi
+let speedTimer = null;   // envoi différé en attente
+let pendingSpeed = null; // { loco, speed } à envoyer
+
+function sendSpeed() {
+    speedTimer = null;
+    if (!pendingSpeed)
+        return;
+    const { loco, speed } = pendingSpeed;
+    pendingSpeed = null;
+    lastSpeedSent = Date.now();
+    send(`/setSpeed?${loco.params()}&speed=${speed}`, `Speed set to ${speed} for ${loco.label()}`);
+}
+
+function queueSpeed(speed, now) {
+    pendingSpeed = { loco: selectedLoco, speed: speed };
+    const wait = SPEED_INTERVAL_MS - (Date.now() - lastSpeedSent);
+    if (now || wait <= 0) {
+        if (speedTimer) {
+            clearTimeout(speedTimer);
+        }
+        sendSpeed();
+    } else if (!speedTimer) {
+        speedTimer = setTimeout(sendSpeed, wait);
+    }
+}
+
+function cancelPendingSpeed() {
+    if (speedTimer) {
+        clearTimeout(speedTimer);
+        speedTimer = null;
+    }
+    pendingSpeed = null;
+}
+
+function speedAllowed(slider) {
     if (!isPowerOn) {
         addLogMessage('Power is off');
-        event.target.value = 0; // Réinitialiser le curseur à 0
-        updateSpeedValue(0);
-        return;
-    }
-    if (!selectedLoco) {
+    } else if (!selectedLoco) {
         addLogMessage('Select a locomotive');
-        event.target.value = 0; // Réinitialiser le curseur à 0
-        updateSpeedValue(0);
-        return;
+    } else {
+        return true;
     }
+    slider.value = 0; // Réinitialiser le curseur à 0
+    updateSpeedValue(0);
+    return false;
+}
+
+const speedSlider = document.getElementById('speedSlider');
+
+speedSlider.addEventListener('input', (event) => {
+    if (!speedAllowed(event.target))
+        return;
     const speed = event.target.value;
-    fetch(`/setSpeed?address=${selectedLoco.address}&speed=${speed}`, { method: 'POST' });
     selectedLoco.setSpeed(speed);
     updateSpeedValue(speed);
-    addLogMessage(`Speed set to ${speed} for address ${selectedLoco.address}`);
+    queueSpeed(speed, false);
+});
+
+// Relâchement du curseur (ou flèches du clavier) : valeur finale tout de suite
+speedSlider.addEventListener('change', (event) => {
+    if (!speedAllowed(event.target))
+        return;
+    queueSpeed(event.target.value, true);
 });
 
 document.querySelectorAll('.address-button').forEach(button => {
@@ -143,13 +219,12 @@ document.querySelectorAll('.address-button').forEach(button => {
         // Ajouter la classe 'selected' au bouton cliqué
         button.classList.add('selected');
         // Mettre à jour la locomotive sélectionnée
-        const address = button.getAttribute('data-address');
-        selectedLoco = locos[address];
-        // Envoyer l'adresse au serveur
-        fetch(`/setAddress?address=${address}`, { method: 'POST' });
+        cancelPendingSpeed(); // la vitesse en attente était pour l'autre loco
+        selectedLoco = locos[locoKey(button)];
         // Mettre à jour l'interface utilisateur avec les valeurs de la locomotive sélectionnée
         updateUI();
-        addLogMessage(`Locomotive selected with address ${address}`);
+        // Le serveur répond avec l'adresse qu'il utilisera
+        send(`/setAddress?${selectedLoco.params()}`, `Locomotive selected (${selectedLoco.label()})`);
     });
 });
 
@@ -158,16 +233,15 @@ document.querySelectorAll('.function-button').forEach(button => {
         if (selectedLoco) {
             const functionId = button.getAttribute('data-function');
             const newState = !selectedLoco.functions[functionId];
-            fetch(`/setFunction?address=${selectedLoco.address}&function=${functionId}&power=${newState ? 1 : 0}`, { method: 'POST' })
-                .then(() => {
-                    selectedLoco.setFunction(functionId, newState);
-                    if (newState) {
-                        button.classList.add('active');
-                        addLogMessage(`Function F ${functionId} activated for address ${selectedLoco.address}`);
-                    } else {
-                        button.classList.remove('active');
-                        addLogMessage(`Function F ${functionId} deactivated for address ${selectedLoco.address}`);
-                    }
+            const loco = selectedLoco;
+            const text = `Function F${functionId} ${newState ? 'activated' : 'deactivated'} for ${loco.label()}`;
+            send(`/setFunction?${loco.params()}&function=${functionId}&power=${newState ? 1 : 0}`, text)
+                .then(ok => {
+                    if (!ok)
+                        return;
+                    loco.setFunction(functionId, newState);
+                    if (loco === selectedLoco)
+                        button.classList.toggle('active', newState);
                 });
         }
     });

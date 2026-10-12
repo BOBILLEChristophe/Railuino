@@ -167,6 +167,15 @@ uint32_t MfxRegistry::uidOf(uint16_t locIdOrSid) const
   return 0;
 }
 
+bool MfxRegistry::assign(uint32_t uid, uint16_t locIdOrSid)
+{
+  const uint16_t sid = locIdOrSid >= Addr::MFX && locIdOrSid < Addr::SX2 ? locIdOrSid - Addr::MFX : locIdOrSid;
+  if (uid == 0 || sid == 0)
+    return false;
+  learn(uid, sid);
+  return locIdOf(uid) == Addr::MFX + sid;
+}
+
 uint8_t MfxRegistry::size() const
 {
   uint8_t n = 0;
