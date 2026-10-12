@@ -30,6 +30,7 @@ jobs:
       # annotation, visible on the summary page of the run.
       - name: Unit tests
         run: |
+          set +e
           pio test -e native 2>&1 | tee test.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
@@ -40,6 +41,7 @@ jobs:
 
       - name: Build every example
         run: |
+          set +e
           sh extras/build_examples.sh 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
