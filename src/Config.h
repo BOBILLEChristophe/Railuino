@@ -3,7 +3,7 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
- * Copyright (C) 2024 christophe bobille
+ * Copyright (C) 2024 – 2026 christophe bobille
  * Copyright (C) 2024 Uwe Monreal
  *
  * This library is free software; you can redistribute it and/or
