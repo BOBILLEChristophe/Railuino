@@ -39,13 +39,14 @@
 #include "TrackController.h"
 #include "TrackReporterS88.h"
 #include "CommandParser.h"
+#include "MfxRegistry.h"
 
 /**
  * Library version, kept in sync with library.properties and library.json.
  */
 #define RAILUINO_VERSION_MAJOR 0
-#define RAILUINO_VERSION_MINOR 12
+#define RAILUINO_VERSION_MINOR 13
 #define RAILUINO_VERSION_PATCH 0
-#define RAILUINO_VERSION_STRING "0.12.0"
+#define RAILUINO_VERSION_STRING "0.13.0"
 
 #endif // RAILUINO_H
