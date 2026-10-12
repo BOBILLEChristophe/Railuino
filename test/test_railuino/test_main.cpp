@@ -120,6 +120,44 @@ void test_answer_for_another_loco_is_ignored()
     TEST_ASSERT_EQUAL_HEX16(0x0222, speed);
 }
 
+void test_answer_must_match_function_cv_and_length()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 50);
+
+    // The MS2 switches F1 of the same loco while we read F0: its answer
+    // comes first and must not be taken as ours.
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x06)
+        {
+            bus->rx.push_back(answer(0x06, {0, 0, 0x40, 0x07, 1, 1}));
+            bus->rx.push_back(answer(0x06, {0, 0, 0x40, 0x07, 0, 0}));
+        }
+    };
+    uint8_t power = 9;
+    TEST_ASSERT_TRUE(ctrl.getLocoFunction(0x4007, 0, &power));
+    TEST_ASSERT_EQUAL_UINT8(0, power);
+
+    // Speed answer of 5 bytes: incomplete, refused.
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x04)
+            bus->rx.push_back(answer(0x04, {0, 0, 0x40, 0x07, 0x02}));
+    };
+    uint16_t speed = 0;
+    TEST_ASSERT_FALSE(ctrl.getLocoSpeed(0x4007, &speed));
+
+    // CV read: the answer for CV 2 is not the one for CV 1.
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x07)
+        {
+            bus->rx.push_back(answer(0x07, {0, 0, 0x40, 0x07, 0, 2, 55}));
+            bus->rx.push_back(answer(0x07, {0, 0, 0x40, 0x07, 0, 1, 7}));
+        }
+    };
+    uint8_t value = 0;
+    TEST_ASSERT_TRUE(ctrl.readConfig(0x4007, 1, &value));
+    TEST_ASSERT_EQUAL_UINT8(7, value);
+}
+
 void test_system_sub_command_must_match()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -308,6 +346,65 @@ void test_async_accessory_switched_again_turns_previous_coil_off()
     TEST_ASSERT_EQUAL_size_t(before + 2, bus->sent.size()); // on + off
 }
 
+static int offAnswersToSkip = 0;
+
+static size_t offFrames()
+{
+    size_t n = 0;
+    for (const CanFrame &f : bus->sent)
+        if (commandOf(f) == 0x0B && f.data[5] == 0)
+            n++;
+    return n;
+}
+
+void test_switch_off_is_retried_then_given_up()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 20);
+    // On is acknowledged; the first switch-off is not.
+    offAnswersToSkip = 1;
+    bus->onSend = [](const CanFrame &f) {
+        if (f.data[5] == 0 && offAnswersToSkip > 0)
+        {
+            offAnswersToSkip--;
+            return;
+        }
+        CanFrame a = f;
+        a.id |= (1UL << 16);
+        bus->rx.push_back(a);
+    };
+    ctrl.setAccessoryAsync(true);
+    ctrl.setTurnoutPulse(200);
+    TEST_ASSERT_EQUAL_UINT16(200, ctrl.getTurnoutPulse());
+
+    const uint32_t start = g_millis;
+    ctrl.setTurnout(0x3000, true);
+    g_millis = start + 300;
+    ctrl.poll(); // not acknowledged: kept for a retry
+    TEST_ASSERT_EQUAL_size_t(1, offFrames());
+    TEST_ASSERT_EQUAL_UINT8(1, ctrl.pendingAccessories());
+    g_millis += 100;
+    ctrl.poll(); // acknowledged
+    TEST_ASSERT_EQUAL_size_t(2, offFrames());
+    TEST_ASSERT_EQUAL_UINT8(0, ctrl.pendingAccessories());
+
+    // Never acknowledged: 3 attempts, then given up.
+    offAnswersToSkip = 100;
+    ctrl.setTurnout(0x3001, true);
+    for (int i = 0; i < 5; i++)
+    {
+        g_millis += 300;
+        ctrl.poll();
+    }
+    TEST_ASSERT_EQUAL_size_t(5, offFrames());
+    TEST_ASSERT_EQUAL_UINT8(0, ctrl.pendingAccessories());
+
+    // Blocking mode retries too.
+    ctrl.setAccessoryAsync(false);
+    offAnswersToSkip = 2;
+    TEST_ASSERT_TRUE(ctrl.setTurnout(0x3002, false));
+    TEST_ASSERT_EQUAL_size_t(8, offFrames());
+}
+
 void test_accessory_command_line_reads_the_power()
 {
     TrackController ctrl(*bus, 0xDF24, false, 10);
@@ -468,6 +565,17 @@ void test_command_parser()
     out.out.clear();
     TEST_ASSERT_FALSE(parser.execute("speed 16391", &out));
     TEST_ASSERT_EQUAL_STRING("error: usage: speed ADDR SPEED(0..1000)\n", out.out.c_str());
+    // Decimal or 0x only: no octal, no sign, no overflow, speed <= 1000.
+    TEST_ASSERT_TRUE(parser.execute("speed 16391 0300"));
+    TEST_ASSERT_EQUAL_HEX8(0x01, bus->sent.back().data[4]); // 300, not 192
+    TEST_ASSERT_EQUAL_HEX8(0x2C, bus->sent.back().data[5]);
+    TEST_ASSERT_FALSE(parser.execute("speed -1 100"));
+    TEST_ASSERT_FALSE(parser.execute("speed 16391 +5"));
+    TEST_ASSERT_FALSE(parser.execute("speed 4294967296 100"));
+    TEST_ASSERT_FALSE(parser.execute("speed 0x 100"));
+    TEST_ASSERT_FALSE(parser.execute("speed 0x4007 1001"));
+    TEST_ASSERT_TRUE(parser.execute("speed 0xFFFFFFFF 1000"));
+
     out.out.clear();
     TEST_ASSERT_FALSE(parser.execute("fly 1", &out));
     TEST_ASSERT_EQUAL_STRING("error: unknown command (type help)\n", out.out.c_str());
@@ -575,7 +683,13 @@ void test_mfx_assign_seeds_the_table()
     TEST_ASSERT_FALSE(mfx.assign(0, 5));
     TEST_ASSERT_FALSE(mfx.assign(0x55667788UL, 0));
     TEST_ASSERT_FALSE(mfx.assign(0x55667788UL, 0x4000));
-    TEST_ASSERT_EQUAL_UINT8(2, mfx.size());
+    TEST_ASSERT_FALSE(mfx.assign(0x55667788UL, 0x8001)); // SX2 address
+    TEST_ASSERT_TRUE(mfx.assign(0x55667788UL, 0x7FFF));  // last MFX Loc-ID
+    TEST_ASSERT_EQUAL_HEX16(0x7FFF, mfx.locIdOf(0x55667788UL));
+    TEST_ASSERT_FALSE(mfx.setFirstSid(0));
+    TEST_ASSERT_FALSE(mfx.setFirstSid(0x4000));
+    TEST_ASSERT_TRUE(mfx.setFirstSid(10));
+    TEST_ASSERT_EQUAL_UINT8(3, mfx.size());
 
     // A later Bind of the MS2 wins.
     bus->rx.push_back(mfxFrame(0x02, false, 0x8B23, 0xFFE9B194UL, 9));
@@ -717,6 +831,7 @@ int main()
     RUN_TEST(test_frames_are_encoded_as_marklin_ids);
     RUN_TEST(test_standard_frames_are_ignored);
     RUN_TEST(test_answer_for_another_loco_is_ignored);
+    RUN_TEST(test_answer_must_match_function_cv_and_length);
     RUN_TEST(test_system_sub_command_must_match);
     RUN_TEST(test_ms2_ping_between_request_and_answer);
     RUN_TEST(test_timeout_across_millis_wrap_around);
@@ -727,6 +842,7 @@ int main()
     RUN_TEST(test_accessory_returns_the_real_result);
     RUN_TEST(test_async_accessory_switches_off_in_poll);
     RUN_TEST(test_async_accessory_switched_again_turns_previous_coil_off);
+    RUN_TEST(test_switch_off_is_retried_then_given_up);
     RUN_TEST(test_accessory_command_line_reads_the_power);
     RUN_TEST(test_s88_with_32_modules);
     RUN_TEST(test_message_builder_and_uid);

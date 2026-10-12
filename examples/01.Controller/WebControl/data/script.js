@@ -90,26 +90,36 @@ function addLogMessage(message) {
     logWindow.textContent = message;  // Remplace le contenu du log par le nouveau message
 }
 
-// Gestionnaire d'événement pour le bouton d'alimentation
+// Bouton d'alimentation : son état vient de la centrale
+function showPower(on) {
+    isPowerOn = on;
+    const powerButton = document.getElementById('powerButton');
+    powerButton.classList.toggle('power-on', on);
+    powerButton.classList.toggle('power-off', !on);
+}
+
 document.getElementById('powerButton').addEventListener('click', () => {
     fetch('/setPower', { method: 'POST' })
-        .then(response => response.text())
-        .then(state => {
-            isPowerOn = state === 'true';
-            const powerButton = document.getElementById('powerButton');
-            if (isPowerOn == true) {
-                powerButton.classList.remove('power-off');
-                powerButton.classList.add('power-on');
-                addLogMessage('Power ON');
-            } else if (isPowerOn == false) {
-                powerButton.classList.remove('power-on');
-                powerButton.classList.add('power-off');
-                addLogMessage('Power OFF');
-            } else {
-                addLogMessage('Error for power function');
+        .then(response => response.text().then(text => {
+            if (!response.ok) {
+                addLogMessage(`Error: ${text}`); // état inchangé
+                return;
             }
-        });
+            showPower(text === 'true');
+            addLogMessage(isPowerOn ? 'Power ON' : 'Power OFF');
+        }))
+        .catch(() => addLogMessage('No answer from the server'));
 });
+
+// État réel (Stop / Go de la MS2 compris) au chargement, puis toutes les 3 s
+function refreshPower() {
+    fetch('/power')
+        .then(response => response.text())
+        .then(text => showPower(text === 'true'))
+        .catch(() => {});
+}
+refreshPower();
+setInterval(refreshPower, 3000);
 
 document.getElementById('systemHaltButton').addEventListener('click', () => {
     if (selectedLoco) {

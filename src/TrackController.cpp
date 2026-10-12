@@ -68,7 +68,8 @@ TrackController::TrackController()
       mMfx(nullptr),
       mMfxCounterOnPowerOn(false),
       mPendingAcc(),
-      mAccAsync(false)
+      mAccAsync(false),
+      mTurnoutPulseMs(1000)
 {
 }
 
@@ -85,7 +86,8 @@ TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bo
       mMfx(nullptr),
       mMfxCounterOnPowerOn(false),
       mPendingAcc(),
-      mAccAsync(false)
+      mAccAsync(false),
+      mTurnoutPulseMs(1000)
 {
 }
 
@@ -100,7 +102,8 @@ TrackController::TrackController(CanDriver &can, uint16_t hash, bool debug, uint
       mMfx(nullptr),
       mMfxCounterOnPowerOn(false),
       mPendingAcc(),
-      mAccAsync(false)
+      mAccAsync(false),
+      mTurnoutPulseMs(1000)
 {
 }
 
@@ -288,6 +291,10 @@ bool TrackController::receiveMessage(TrackMessage &message)
 
     message.clear();
     message.setCanId(frame.id);
+    // A CAN frame carries at most 8 bytes; a custom driver might not
+    // check it.
+    if (frame.len > 8)
+        frame.len = 8;
     message.length = frame.len;
     for (uint8_t i = 0; i < frame.len; i++)
         message.data[i] = frame.data[i];
@@ -302,13 +309,33 @@ bool TrackController::receiveMessage(TrackMessage &message)
    TrackController::exchangeMessage
 -------------------------------------------------------------------  */
 
+// Minimum length of a valid answer: the bytes that the getters read.
+static uint8_t minAnswerLength(uint8_t command)
+{
+    switch (command)
+    {
+    case Cmd::Direction:
+        return 5; // direction in data[4]
+    case Cmd::ReadConfig:
+        return 7; // CV number in data[4..5], value in data[6]
+    case Cmd::Speed:       // speed in data[4..5]
+    case Cmd::Function:    // function, value in data[4..5]
+    case Cmd::WriteConfig: // CV number in data[4..5]
+    case Cmd::Accessory:   // position, power in data[4..5]
+    case Cmd::Bind:        // UID, SID in data[0..5]
+        return 6;
+    default:
+        return 5;
+    }
+}
+
 bool TrackController::isResponseTo(const TrackMessage &out, const TrackMessage &in)
 {
     if (!in.response || in.command != out.command)
         return false;
 
-    // Ignore responses carrying 4 bytes or less.
-    if (in.length <= 4)
+    // Too short to carry the expected values.
+    if (in.length < minAnswerLength(out.command))
         return false;
 
     switch (out.command)
@@ -316,24 +343,35 @@ bool TrackController::isResponseTo(const TrackMessage &out, const TrackMessage &
     case Cmd::System: // UID in data[0..3], sub-command in data[4]
         if (out.length >= 5 && in.data[4] != out.data[4])
             return false;
-        // fall through
+        break;
+
+    case Cmd::Function: // same function number (another one may be
+    case Cmd::Accessory: // switched by the MS2 meanwhile), same position
+        if (out.length >= 5 && in.data[4] != out.data[4])
+            return false;
+        break;
+
+    case Cmd::ReadConfig: // same CV number
+    case Cmd::WriteConfig:
+        if (in.data[4] != out.data[4] || in.data[5] != out.data[5])
+            return false;
+        break;
+
     case Cmd::Bind:
     case Cmd::Verify:
     case Cmd::Speed:
     case Cmd::Direction:
-    case Cmd::Function:
-    case Cmd::ReadConfig:
-    case Cmd::WriteConfig:
-    case Cmd::Accessory:
-        // The response must concern the same locomotive / accessory
-        // (or the same MFX UID for Bind and Verify).
-        // Without this check, the answer for another locomotive (sent
-        // by an MS2 on the same bus) could be taken as ours.
-        return in.uid() == out.uid();
+        break;
 
     default: // Ping, Discovery, Bootloader...
         return true;
     }
+
+    // The response must concern the same locomotive / accessory (or the
+    // same MFX UID for Bind and Verify). Without this check, the answer
+    // for another locomotive (sent by an MS2 on the same bus) could be
+    // taken as ours.
+    return in.uid() == out.uid();
 }
 
 bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint32_t timeout)
@@ -579,6 +617,21 @@ bool TrackController::switchAccessoryOff(const uint32_t address, uint8_t positio
     return exchangeMessage(message, message, mTimeout);
 }
 
+// Blocking: tries ACC_OFF_TRIES times, ACC_OFF_RETRY_MS apart.
+bool TrackController::switchAccessoryOffWithRetries(const uint32_t address, uint8_t position)
+{
+    for (uint8_t i = 0; i < ACC_OFF_TRIES; i++)
+    {
+        if (i > 0)
+            delay(ACC_OFF_RETRY_MS);
+        if (switchAccessoryOff(address, position))
+            return true;
+    }
+    if (mLog)
+        mLog->println(F("!!! Accessory switch-off not acknowledged"));
+    return false;
+}
+
 bool TrackController::setAccessory(const uint32_t address, uint8_t position, uint8_t power, uint16_t time)
 {
     // A pulse still running on this accessory: switch it off first, so
@@ -588,7 +641,7 @@ bool TrackController::setAccessory(const uint32_t address, uint8_t position, uin
         if (p.used && p.address == address)
         {
             p.used = false;
-            switchAccessoryOff(p.address, p.position);
+            switchAccessoryOffWithRetries(p.address, p.position);
         }
     }
 
@@ -610,6 +663,7 @@ bool TrackController::setAccessory(const uint32_t address, uint8_t position, uin
                 p.used = true;
                 p.address = address;
                 p.position = position;
+                p.tries = 0;
                 p.dueMs = millis() + time;
                 return ok;
             }
@@ -621,20 +675,35 @@ bool TrackController::setAccessory(const uint32_t address, uint8_t position, uin
 
     // Switch the coil off. Always sent, even if the first message was not
     // acknowledged, so that a coil is never left on.
-    return switchAccessoryOff(address, position) && ok;
+    return switchAccessoryOffWithRetries(address, position) && ok;
 }
 
 void TrackController::serviceAccessories(bool all)
 {
-    const uint32_t now = millis();
     for (PendingAccessory &p : mPendingAcc)
     {
-        // Signed difference: correct across the millis() wrap-around.
-        if (p.used && (all || static_cast<int32_t>(now - p.dueMs) >= 0))
+        // all: send now, and retry until done or ACC_OFF_TRIES reached.
+        while (p.used && (all || static_cast<int32_t>(millis() - p.dueMs) >= 0))
         {
-            p.used = false;
-            if (!switchAccessoryOff(p.address, p.position) && mLog)
-                mLog->println(F("!!! Accessory switch-off not acknowledged"));
+            if (switchAccessoryOff(p.address, p.position))
+            {
+                p.used = false;
+            }
+            else if (++p.tries >= ACC_OFF_TRIES)
+            {
+                p.used = false;
+                if (mLog)
+                    mLog->println(F("!!! Accessory switch-off not acknowledged"));
+            }
+            else if (all)
+            {
+                delay(ACC_OFF_RETRY_MS);
+            }
+            else
+            {
+                // Not acknowledged: try again a little later, from poll().
+                p.dueMs = millis() + ACC_OFF_RETRY_MS;
+            }
         }
     }
 }
@@ -662,7 +731,7 @@ void TrackController::flushAccessories()
 
 bool TrackController::setTurnout(const uint32_t address, bool straight)
 {
-    return setAccessory(address, straight ? ACC_STRAIGHT : ACC_ROUND, 1, 1000);
+    return setAccessory(address, straight ? ACC_STRAIGHT : ACC_ROUND, 1, mTurnoutPulseMs);
 }
 
 bool TrackController::getAccessory(const uint32_t address, uint8_t *position, uint8_t *power)

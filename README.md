@@ -66,14 +66,23 @@ TrackController ctrl(0xDF24); // hash ; 0 = généré automatiquement
 
 void setup() {
   Serial.begin(115200);
-  ctrl.begin(CAN_RX, CAN_TX);
-  ctrl.setPower(true);
-  ctrl.setLocoFunction(LOCO, 0, 1); // feux
-  ctrl.setLocoSpeed(LOCO, 300);     // 0 à 1000
+  if (!ctrl.begin(CAN_RX, CAN_TX)) {   // câblage, broches, quartz du MCP2515
+    Serial.println("Bus CAN non démarré");
+    return;
+  }
+  if (!ctrl.setPower(true)) {          // la Gleisbox doit être branchée
+    Serial.println("Pas de réponse de la Gleisbox");
+    return;
+  }
+  ctrl.setLocoFunction(LOCO, 0, 1);   // feux
+  if (!ctrl.setLocoSpeed(LOCO, 300))  // 0 à 1000
+    Serial.println("Pas de réponse pour cette adresse");
 }
 
 void loop() {}
 ```
+
+Chaque commande renvoie `true` quand la centrale a répondu. La loco ne roule que si son adresse est la bonne : pour une loco MFX, c'est celle que la MS2 lui a attribuée (voir *Locomotives MFX*).
 
 Pour recevoir les messages des autres appareils (MS2, rétrosignalisation…), enregistrez une fonction avec `ctrl.onMessage(...)` et appelez `ctrl.poll()` dans `loop()` : voir l'exemple `Monitor`. Les constantes du protocole sont dans `MarklinProtocol.h` (`Marklin::Cmd::Speed`, `Marklin::Direction::Toggle`…).
 
@@ -121,6 +130,8 @@ Dans `examples/01.Controller` :
 Dans `examples/02.Drivers` : `Mcp2515OnEsp32`, un ESP32 avec un module MCP2515 au lieu de son contrôleur intégré.
 
 TcpCommand et WebControl lisent les identifiants WiFi dans un fichier `secrets.h`, à créer dans le dossier de l'exemple à partir de `secrets.h.example`. Ce fichier est ignoré par Git.
+
+TcpCommand et WebControl n'ont pas de mot de passe : tout appareil de votre réseau local peut piloter le réseau ferré. Ne les rendez pas accessibles depuis Internet (pas de redirection de port sur la box).
 
 ## Développer la bibliothèque
 
