@@ -241,7 +241,7 @@ bool TrackController::sendMessage(TrackMessage &message)
     frame.id = (static_cast<uint32_t>(message.prio) << 25) | (static_cast<uint32_t>(message.command) << 17) | (static_cast<uint32_t>(message.response) << 16) | message.hash;
     frame.ext = true;
     frame.len = message.length;
-    for (byte i = 0; i < message.length; i++)
+    for (uint8_t i = 0; i < message.length; i++)
         frame.data[i] = message.data[i];
 
     if (mDebug)
@@ -682,7 +682,7 @@ bool TrackController::emergency(const uint16_t address)
    TrackController::setLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoDirection(const uint16_t address, byte direction)
+bool TrackController::setLocoDirection(const uint16_t address, uint8_t direction)
 {
     TrackMessage message;
 
@@ -729,7 +729,7 @@ bool TrackController::toggleLocoDirection(const uint16_t address)
    TrackController::getLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
+bool TrackController::getLocoDirection(const uint16_t address, uint8_t *direction)
 {
     TrackMessage message;
 
@@ -752,7 +752,7 @@ bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
    TrackController::setLocoFunction
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoFunction(const uint16_t address, byte function, byte power)
+bool TrackController::setLocoFunction(const uint16_t address, uint8_t function, uint8_t power)
 {
     TrackMessage message;
 
@@ -771,7 +771,7 @@ bool TrackController::setLocoFunction(const uint16_t address, byte function, byt
    TrackController::readConfig
 -------------------------------------------------------------------  */
 
-bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *value)
+bool TrackController::readConfig(const uint16_t address, uint16_t number, uint8_t *value)
 {
     TrackMessage message;
 
@@ -784,7 +784,7 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
     message.data[5] = lowByte(number);
     message.data[6] = 0x01;
 
-    if (exchangeMessage(message, message, 10000))
+    if (exchangeMessage(message, message, CV_TIMEOUT))
     {
         value[0] = message.data[6];
         return true;
@@ -799,7 +799,7 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
    TrackController::getLocoFunction
 -------------------------------------------------------------------  */
 
-bool TrackController::getLocoFunction(const uint16_t address, byte function, byte *power)
+bool TrackController::getLocoFunction(const uint16_t address, uint8_t function, uint8_t *power)
 {
     TrackMessage message;
 
@@ -841,9 +841,9 @@ bool TrackController::setLocoSpeed(const uint16_t address, uint16_t speed)
 /* -------------------------------------------------------------------
    TrackController::toggleLocoFunction
 -------------------------------------------------------------------  */
-bool TrackController::toggleLocoFunction(const uint16_t address, byte function)
+bool TrackController::toggleLocoFunction(const uint16_t address, uint8_t function)
 {
-    byte power;
+    uint8_t power;
     if (getLocoFunction(address, function, &power))
     {
         return setLocoFunction(address, function, power ? 0 : 1);
@@ -854,7 +854,7 @@ bool TrackController::toggleLocoFunction(const uint16_t address, byte function)
 /* -------------------------------------------------------------------
    TrackController::setAccessory
 -------------------------------------------------------------------  */
-boolean TrackController::setAccessory(const uint16_t address, byte position, byte power, uint16_t time)
+bool TrackController::setAccessory(const uint16_t address, uint8_t position, uint8_t power, uint16_t time)
 {
     TrackMessage message;
 
@@ -866,12 +866,14 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
     message.data[4] = position;
     message.data[5] = power;
 
-    exchangeMessage(message, message, mTimeout);
+    bool ok = exchangeMessage(message, message, mTimeout);
 
     if (time != 0)
     {
         delay(time);
 
+        // Switch the coil off (power = 0). Always sent, even if the first
+        // message was not acknowledged, so that a coil is never left on.
         message.clear();
         message.command = 0x0B;
         message.length = 6;
@@ -879,9 +881,9 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
         message.data[3] = (address & 0x00FF);
         message.data[4] = position;
 
-        exchangeMessage(message, message, mTimeout);
+        ok = exchangeMessage(message, message, mTimeout) && ok;
     }
-    return true;
+    return ok;
 }
 
 /* -------------------------------------------------------------------
@@ -919,7 +921,7 @@ bool TrackController::getLocoSpeed(const uint16_t address, uint16_t *speed)
 /* -------------------------------------------------------------------
    TrackController::getAccessory
 -------------------------------------------------------------------  */
-bool TrackController::getAccessory(const uint16_t address, byte *position, byte *power)
+bool TrackController::getAccessory(const uint16_t address, uint8_t *position, uint8_t *power)
 {
     TrackMessage message;
 
@@ -944,48 +946,40 @@ bool TrackController::getAccessory(const uint16_t address, byte *position, byte 
 /* -------------------------------------------------------------------
    TrackController::getVersion
 -------------------------------------------------------------------  */
-bool TrackController::getVersion(byte *high, byte *low)
+bool TrackController::getVersion(uint8_t *high, uint8_t *low)
 {
-    bool result = false;
-
+    // Ping (0x18): every device on the bus answers with its software
+    // version in data[4..5] and its device type in data[6..7]. The MS2
+    // often answers first, so we keep listening until the Gleisbox
+    // (device type 0x0010) has answered or the timeout expires.
     TrackMessage message;
-
     message.clear();
     message.command = 0x18;
 
-    if (exchangeMessage(message, message, mTimeout))
-    {
-        Serial.print("version : ");
-        Serial.print(message.data[4]);
-        Serial.println(message.data[5]);
-        return result = true;
-    }
+    if (!sendMessage(message))
+        return false;
 
-    // sendMessage(message);
-
-    delay(500);
-    message.clear();
-    while (receiveMessage(message))
+    const uint32_t start = millis();
+    while (millis() - start < mTimeout)
     {
-        //   if (message.command == 0x18 && message.response) {
-        if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10)
+        if (receiveMessage(message) && message.command == 0x18 && message.response && message.length == 8 && message.data[6] == 0x00 && message.data[7] == 0x10)
         {
-            (*high) = message.data[4];
-            (*low) = message.data[5];
-            //     Serial.print("version : ");
-            //     Serial.print(message.data[4]);
-            //     Serial.println(message.data[5]);
-            result = true;
+            if (high != nullptr)
+                *high = message.data[4];
+            if (low != nullptr)
+                *low = message.data[5];
+            return true;
         }
+        yield();
     }
-    return result;
+    return false;
 }
 
 /* -------------------------------------------------------------------
    TrackController::writeConfig
 -------------------------------------------------------------------  */
 
-bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte value)
+bool TrackController::writeConfig(const uint16_t address, uint16_t number, uint8_t value)
 {
     TrackMessage message;
 
@@ -999,7 +993,8 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
     message.data[5] = lowByte(number);
     message.data[6] = value;
 
-    return exchangeMessage(message, message, mTimeout);
+    // CV_TIMEOUT (10 s), as in Railuino 0.9: a write can take seconds.
+    return exchangeMessage(message, message, CV_TIMEOUT);
 }
 
 /* -------------------------------------------------------------------
@@ -1040,9 +1035,12 @@ void TrackController::handleUserCommands(String command)
     else if (command.startsWith("accessory "))
     {
         uint16_t address = command.substring(10, 15).toInt();
+        // Format: "accessory AAAAA P W TTT" (address on 5 digits,
+        // position, power, time in ms). Power used to be read at
+        // index 17, i.e. on the space, and was therefore always 0.
         uint8_t position = command.substring(16, 17).toInt();
-        uint8_t power = command.substring(17, 18).toInt();
-        uint16_t time = command.substring(19).toInt();
+        uint8_t power = command.substring(18, 19).toInt();
+        uint16_t time = command.substring(20).toInt();
         setAccessory(address, position, power, time);
     }
     //}

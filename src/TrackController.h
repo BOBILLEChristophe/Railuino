@@ -317,14 +317,14 @@ public:
 
   /**
    * Queries the direction of the given locomotive and writes it
-   * into the referenced byte. The return value indicates whether
+   * into the referenced uint8_t. The return value indicates whether
    * the call was successful and the direction is valid.
    */
   bool getLocoDirection(const uint16_t address, uint8_t *direction);
 
   /**
    * Queries the speed of the given locomotive and writes it
-   * into the referenced byte. The return value indicates whether
+   * into the referenced uint8_t. The return value indicates whether
    * the call was successful and the speed is valid.
    */
 
@@ -332,7 +332,7 @@ public:
 
   /**
    * Queries the given function of the given locomotive and writes
-   * it into the referenced byte. The return value indicates
+   * it into the referenced uint8_t. The return value indicates
    * whether the call was successful and the power is valid. Note
    * that the call will not reflect the original power value sent
    * to the function, but only 0 ("off") or 1 ("on").
@@ -369,14 +369,17 @@ public:
   //!\\ Les décodeurs MFX de première génération ne sont pas conçus pour cela et pourraient être endommagés
   //!\\ First-generation MFX decoders are not designed for this purpose and could be damaged.
 
-  // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.8 Befehl: Fast Read für mfx SID - Adresse
+  // Command 0x07 "Read Config" of the CS2 CAN protocol
+  // (https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf).
+  // Uses CV_TIMEOUT (10 s).
 
-  bool readConfig(const uint16_t address, uint16_t number, byte *value);
+  bool readConfig(const uint16_t address, uint16_t number, uint8_t *value);
 
   /**
-   * Queries the software version of the track format processor.
+   * Queries the software version of the track format processor
+   * (Gleisbox, device type 0x0010). Answers from other devices (MS2...)
+   * are ignored. high and low may be nullptr.
    */
-  // bool getVersion();
   bool getVersion(uint8_t *high, uint8_t *low);
 
   /**
