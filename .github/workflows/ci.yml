@@ -56,7 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # "submit": rules for a first registration in the Library Manager.
-      # Change to "update" once Railuino is listed.
+      # Railuino was accepted on 12 October 2026 (arduino/library-registry
+      # #9364): change to "update" once it appears in the index.
       - uses: arduino/arduino-lint-action@v2
         with:
           library-manager: submit
