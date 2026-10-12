@@ -101,6 +101,28 @@ private:
    */
   bool mMfxCounterOnPowerOn;
 
+  /**
+   * Non-blocking accessories (setAccessoryAsync): switch-off messages
+   * waiting to be sent by poll().
+   */
+#if defined(ARDUINO_ARCH_AVR)
+  static const uint8_t MAX_PENDING_ACC = 4;
+#else
+  static const uint8_t MAX_PENDING_ACC = 8;
+#endif
+  struct PendingAccessory
+  {
+    uint32_t address;
+    uint32_t dueMs;
+    uint8_t position;
+    bool used;
+  };
+  PendingAccessory mPendingAcc[MAX_PENDING_ACC];
+  bool mAccAsync;
+
+  bool switchAccessoryOff(const uint32_t address, uint8_t position);
+  void serviceAccessories(bool all);
+
   void logFrame(const char *direction, const CanFrame &frame);
   void dispatch(const TrackMessage &message);
 
@@ -206,9 +228,34 @@ public:
 
   /**
    * Reads every message waiting in the CAN driver and passes it to the
-   * onMessage() handler. Call it often from loop().
+   * onMessage() handler, and sends the accessory switch-offs that are
+   * due (see setAccessoryAsync()). Call it often from loop().
    */
   void poll();
+
+  /**
+   * Non-blocking accessories. false (default): setAccessory() and
+   * setTurnout() wait for the end of the pulse (delay), as before.
+   * true: they switch the coil on and return at once; the switch-off is
+   * sent by poll() when the time is over, so loop() keeps running (web
+   * server, other commands) during the pulse. poll() must then be called
+   * often, or the coil stays on. Switching an accessory again while its
+   * pulse runs switches the previous position off first. If more than
+   * 8 pulses (4 on AVR) run at the same time, the call blocks as before.
+   */
+  void setAccessoryAsync(bool on);
+  bool isAccessoryAsync() const { return mAccAsync; }
+
+  /**
+   * Number of accessory switch-offs waiting to be sent by poll().
+   */
+  uint8_t pendingAccessories() const;
+
+  /**
+   * Sends all the waiting switch-offs now (e.g. before end() or a
+   * long blocking operation).
+   */
+  void flushAccessories();
 
   /**
    * Called by MfxRegistry::begin(): the registry then receives every
@@ -396,7 +443,9 @@ public:
    * switched on. Some magnetic accessories must not be active for
    * too long, because they might burn out. A good timeout for
    * Marklin turnouts seems to be 20 ms. The return value reflects
-   * whether the call was successful.
+   * whether the call was successful. With setAccessoryAsync(true) the
+   * call returns after switching on, and poll() switches off; the return
+   * value then only covers the switching on.
    */
   bool setAccessory(const uint32_t address, uint8_t position, uint8_t power, uint16_t time);
 

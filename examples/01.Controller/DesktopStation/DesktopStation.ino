@@ -343,6 +343,9 @@ void setup()
 {
   Serial.begin(SERIAL_BAUD);
   canReady = ctrl.begin(CAN_RX, CAN_TX);
+  // Turnouts: setTurnout() answers at once, poll() switches the coil off;
+  // a route of several turnouts is no longer slowed down by the pulses.
+  ctrl.setAccessoryAsync(true);
   ctrl.onMessage(onCanMessage); // after begin(): no events before "100 Ready"
   Serial.println(F("--------------------------------------"));
   Serial.println(F("Desktop Station Interface (Railuino)"));
@@ -398,5 +401,5 @@ void loop()
     lineOverflow = false;
   }
 
-  ctrl.poll(); // bus events -> onCanMessage
+  ctrl.poll(); // bus events -> onCanMessage, turnout switch-offs
 }

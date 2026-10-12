@@ -247,6 +247,23 @@ document.querySelectorAll('.function-button').forEach(button => {
     });
 });
 
+// Aiguillages : la page n'attend pas la fin de l'impulsion, l'ESP32
+// coupe la bobine tout seul.
+document.querySelectorAll('.turnout').forEach(turnout => {
+    const address = turnout.getAttribute('data-address');
+    turnout.querySelectorAll('.turnout-button').forEach(button => {
+        button.addEventListener('click', () => {
+            const straight = button.getAttribute('data-straight');
+            send(`/setTurnout?address=${address}&straight=${straight}`, `Turnout ${address} ${straight === '1' ? 'straight' : 'round'}`)
+                .then(ok => {
+                    if (!ok)
+                        return;
+                    turnout.querySelectorAll('.turnout-button').forEach(b => b.classList.toggle('active', b === button));
+                });
+        });
+    });
+});
+
 function updateSpeedValue(speed) {
     const speedValue = document.getElementById('speedValue');
     const percentage = (speed / 1000) * 100;

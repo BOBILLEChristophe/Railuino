@@ -8,6 +8,10 @@
  * that follows the registrations made by the MS2, so the page keeps
  * working when the MS2 gives the locomotive a new SID. data-address is
  * used until the registry knows the UID. GET /locos lists the table.
+ *
+ * Turnouts: buttons with data-address in index.html (12288 = MM2
+ * turnout 1). The coil is switched off by ctrl.poll() in loop(), so the
+ * page keeps answering during the pulse (setAccessoryAsync).
  * Interface web du réseau (ESP32 uniquement). Les pages sont dans data/ :
  * les téléverser avec PlatformIO > Platform > Upload Filesystem Image.
  */
@@ -279,6 +283,19 @@ void handleSetFunction()
   sendResult(ctrl.setLocoFunction(address, function, power), "Function set", address);
 }
 
+void handleSetTurnout()
+{
+  if (!server.hasArg("address") || !server.hasArg("straight"))
+  {
+    server.send(400, "text/plain", "Turnout parameter missing");
+    return;
+  }
+  const uint16_t address = server.arg("address").toInt();
+  const bool straight = server.arg("straight").toInt() != 0;
+  // Returns after switching on; ctrl.poll() switches off.
+  sendResult(ctrl.setTurnout(address, straight), straight ? "Turnout straight" : "Turnout round", address);
+}
+
 void handleNotFound()
 {
   server.send(404, "text/plain", "Not found");
@@ -320,11 +337,13 @@ void setup()
   server.on("/setSpeed", HTTP_POST, handleSetSpeed);
   server.on("/setAddress", HTTP_POST, handleSetAddress);
   server.on("/setFunction", HTTP_POST, handleSetFunction);
+  server.on("/setTurnout", HTTP_POST, handleSetTurnout);
   server.on("/locos", HTTP_GET, handleLocos);
   server.onNotFound(handleNotFound);
 
   server.begin();
   ctrl.begin(CAN_RX, CAN_TX);
+  ctrl.setAccessoryAsync(true); // turnouts: switch-off sent by poll()
 
   mfx.setAutoSave(true); // the table survives a restart
   mfx.begin();           // observer: learns the addresses given by the MS2
@@ -334,5 +353,5 @@ void setup()
 void loop()
 {
   server.handleClient();
-  ctrl.poll(); // MS2 messages -> MFX table
+  ctrl.poll(); // MS2 messages -> MFX table, turnout switch-offs
 }

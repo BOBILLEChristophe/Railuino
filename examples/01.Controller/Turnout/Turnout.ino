@@ -42,6 +42,9 @@ void setup()
   ctrl.begin(CAN_RX, CAN_TX);
   Serial.println(F("Power on"));
   ctrl.setPower(true);
+  // Blocking mode (default): setTurnout() waits for the end of the pulse.
+  // With ctrl.setAccessoryAsync(true), it returns at once and ctrl.poll()
+  // must be called often from loop() to switch the coil off.
 }
 
 void loop()

@@ -66,7 +66,9 @@ TrackController::TrackController()
       mHandler(nullptr),
       mHandlerContext(nullptr),
       mMfx(nullptr),
-      mMfxCounterOnPowerOn(false)
+      mMfxCounterOnPowerOn(false),
+      mPendingAcc(),
+      mAccAsync(false)
 {
 }
 
@@ -81,7 +83,9 @@ TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bo
       mHandler(nullptr),
       mHandlerContext(nullptr),
       mMfx(nullptr),
-      mMfxCounterOnPowerOn(false)
+      mMfxCounterOnPowerOn(false),
+      mPendingAcc(),
+      mAccAsync(false)
 {
 }
 
@@ -94,7 +98,9 @@ TrackController::TrackController(CanDriver &can, uint16_t hash, bool debug, uint
       mHandler(nullptr),
       mHandlerContext(nullptr),
       mMfx(nullptr),
-      mMfxCounterOnPowerOn(false)
+      mMfxCounterOnPowerOn(false),
+      mPendingAcc(),
+      mAccAsync(false)
 {
 }
 
@@ -147,6 +153,7 @@ void TrackController::poll()
         dispatch(message);
     if (mMfx != nullptr)
         mMfx->service();
+    serviceAccessories(false);
 }
 
 /* -------------------------------------------------------------------
@@ -205,6 +212,9 @@ bool TrackController::begin()
 
 void TrackController::end()
 {
+    // No coil left on.
+    flushAccessories();
+
     // Discards the messages waiting in the CAN driver's receive FIFO.
     TrackMessage message;
     while (receiveMessage(message))
@@ -561,26 +571,93 @@ bool TrackController::toggleLocoFunction(const uint32_t address, uint8_t functio
    Accessories
 -------------------------------------------------------------------  */
 
+bool TrackController::switchAccessoryOff(const uint32_t address, uint8_t position)
+{
+    // Power = 0 switches the coil off.
+    TrackMessage message = TrackMessage::make(Cmd::Accessory, address, 6);
+    message.data[4] = position;
+    return exchangeMessage(message, message, mTimeout);
+}
+
 bool TrackController::setAccessory(const uint32_t address, uint8_t position, uint8_t power, uint16_t time)
 {
+    // A pulse still running on this accessory: switch it off first, so
+    // that the two coils of a turnout are never on together.
+    for (PendingAccessory &p : mPendingAcc)
+    {
+        if (p.used && p.address == address)
+        {
+            p.used = false;
+            switchAccessoryOff(p.address, p.position);
+        }
+    }
+
     TrackMessage message = TrackMessage::make(Cmd::Accessory, address, 6);
     message.data[4] = position;
     message.data[5] = power;
 
     bool ok = exchangeMessage(message, message, mTimeout);
 
-    if (time != 0)
+    if (time == 0)
+        return ok;
+
+    if (mAccAsync)
     {
-        delay(time);
-
-        // Switch the coil off (power = 0). Always sent, even if the first
-        // message was not acknowledged, so that a coil is never left on.
-        message = TrackMessage::make(Cmd::Accessory, address, 6);
-        message.data[4] = position;
-
-        ok = exchangeMessage(message, message, mTimeout) && ok;
+        for (PendingAccessory &p : mPendingAcc)
+        {
+            if (!p.used)
+            {
+                p.used = true;
+                p.address = address;
+                p.position = position;
+                p.dueMs = millis() + time;
+                return ok;
+            }
+        }
+        // No free slot: wait, as in blocking mode.
     }
-    return ok;
+
+    delay(time);
+
+    // Switch the coil off. Always sent, even if the first message was not
+    // acknowledged, so that a coil is never left on.
+    return switchAccessoryOff(address, position) && ok;
+}
+
+void TrackController::serviceAccessories(bool all)
+{
+    const uint32_t now = millis();
+    for (PendingAccessory &p : mPendingAcc)
+    {
+        // Signed difference: correct across the millis() wrap-around.
+        if (p.used && (all || static_cast<int32_t>(now - p.dueMs) >= 0))
+        {
+            p.used = false;
+            if (!switchAccessoryOff(p.address, p.position) && mLog)
+                mLog->println(F("!!! Accessory switch-off not acknowledged"));
+        }
+    }
+}
+
+void TrackController::setAccessoryAsync(bool on)
+{
+    if (!on)
+        flushAccessories();
+    mAccAsync = on;
+}
+
+uint8_t TrackController::pendingAccessories() const
+{
+    uint8_t n = 0;
+    for (const PendingAccessory &p : mPendingAcc)
+        if (p.used)
+            n++;
+    return n;
+}
+
+void TrackController::flushAccessories()
+{
+    serviceAccessories(true);
 }
 
 bool TrackController::setTurnout(const uint32_t address, bool straight)

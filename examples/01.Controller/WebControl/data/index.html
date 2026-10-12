@@ -45,7 +45,21 @@
         <button class="function-button" data-function="8">F8</button>
         <button class="function-button" data-function="9">F9</button>
     </div>
-    
+    <!-- Aiguillages : data-address = adresse CAN (12288 = aiguillage MM2 n° 1,
+         12289 = n° 2...). Ajoutez ou retirez des lignes à volonté. -->
+    <div class="turnout-buttons">
+        <div class="turnout" data-address="12288">
+            <span class="turnout-label">Aiguillage 1</span>
+            <button class="turnout-button" data-straight="1">Droit</button>
+            <button class="turnout-button" data-straight="0">Dévié</button>
+        </div>
+        <div class="turnout" data-address="12289">
+            <span class="turnout-label">Aiguillage 2</span>
+            <button class="turnout-button" data-straight="1">Droit</button>
+            <button class="turnout-button" data-straight="0">Dévié</button>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>

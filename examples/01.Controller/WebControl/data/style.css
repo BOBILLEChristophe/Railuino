@@ -103,3 +103,34 @@ h1 {
     background-color: rgb(74, 72, 72);
     color: white;
 }
+
+.turnout-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.turnout {
+    display: flex;
+    align-items: center;
+    margin: 5px 15px;
+}
+
+.turnout-label {
+    margin-right: 5px;
+}
+
+.turnout-button {
+    margin: 5px;
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: lightgray;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.turnout-button.active {
+    background-color: #2e7d32;
+    color: white;
+}
