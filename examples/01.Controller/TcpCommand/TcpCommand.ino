@@ -75,22 +75,22 @@ void setup()
   server.begin();
 
   ctrl.begin(CAN_RX, CAN_TX);
+  ctrl.setAccessoryAsync(true); // turnouts: switch-off sent by poll()
 }
 
 void loop()
 {
-  while (!client) // listen for incoming clients
+  // Does not wait for a client: loop() must keep calling ctrl.poll().
+  if (!client || !client.connected())
     client = server.available();
-  if (client.connected())
+  if (client && client.connected() && client.available())
   {
-    if (client.available())
-    {
-      String command = client.readStringUntil('\n');
+    String command = client.readStringUntil('\n');
 
-      Serial.println(command);
-      ctrl.handleUserCommands(command);
-    }
+    Serial.println(command);
+    ctrl.handleUserCommands(command);
   }
+  ctrl.poll(); // received messages, turnout switch-offs
 }
 
 // if (!client.connected())

@@ -4,11 +4,14 @@
 
 ### Added
 - Example `DesktopStation`: serial gateway for the Desktop Station software, from Uwe Monreal's pull request #1 (Serial_RS5_ESP32_LED, based on Yaasan's gateway), on the current library. Same commands, answers and events as the original; `reset()` and `getS88()` restored; ESP32, Uno and Mega.
+- Non-blocking accessories: `TrackController::setAccessoryAsync(true)` makes `setAccessory()` / `setTurnout()` return after switching the coil on; `poll()` sends the switch-off when the pulse is over, so `loop()` keeps running (web server, other commands). Switching a turnout again during its pulse switches the previous coil off first; `end()` and `flushAccessories()` leave no coil on; `pendingAccessories()`. Off by default (blocking, as before).
+- WebControl: turnout buttons (`/setTurnout`, two MM2 turnouts 12288 and 12289 in `index.html`), non-blocking.
 - `MfxRegistry::assign(uid, address)`: records a known UID -> address pair (Loc-ID or SID); a later Bind of the MS2 replaces it.
 - WebControl: locomotives can be given by their MFX UID (`data-uid` in `index.html`); the sketch follows the addresses given by the MS2 with an `MfxRegistry` (kept in NVS) and uses `data-address` until the UID is known. `GET /locos` returns the table as JSON. Answers give the address used.
 
 ### Changed
 - `exchangeMessage()` also checks the UID of the answers to MFX Bind and Verify.
+- TcpCommand no longer blocks in `loop()` while waiting for a client, and calls `poll()`. TcpCommand, SerialCommand and DesktopStation use non-blocking accessories.
 - WebControl: the speed slider sends at most one command every 100 ms while it moves, and always the final value when it is released (it sent one per pixel). Errors of the layout are shown in the log (HTTP 503) instead of being ignored.
 
 ## 0.13.0 — 2026-10-12 (phase 5: MFX registration)

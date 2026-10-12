@@ -242,6 +242,72 @@ void test_accessory_returns_the_real_result()
     TEST_ASSERT_EQUAL_HEX8(0, bus->sent.back().data[5]);
 }
 
+static void echoAccessories()
+{
+    bus->onSend = [](const CanFrame &f) {
+        CanFrame a = f;
+        a.id |= (1UL << 16);
+        bus->rx.push_back(a); // Gleisbox echo
+    };
+}
+
+void test_async_accessory_switches_off_in_poll()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 50);
+    echoAccessories();
+    ctrl.setAccessoryAsync(true);
+
+    const uint32_t start = g_millis;
+    TEST_ASSERT_TRUE(ctrl.setTurnout(0x3000, true));
+    TEST_ASSERT_EQUAL_size_t(1, bus->sent.size());   // on only
+    TEST_ASSERT_EQUAL_HEX8(1, bus->sent[0].data[5]);
+    TEST_ASSERT_TRUE(g_millis - start < 100);          // did not wait
+    TEST_ASSERT_EQUAL_UINT8(1, ctrl.pendingAccessories());
+
+    ctrl.poll(); // too early
+    TEST_ASSERT_EQUAL_size_t(1, bus->sent.size());
+
+    g_millis = start + 1100; // 1000 ms pulse, plus the time of the exchange
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_size_t(2, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(ACC_STRAIGHT, bus->sent[1].data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0, bus->sent[1].data[5]);   // off
+    TEST_ASSERT_EQUAL_UINT8(0, ctrl.pendingAccessories());
+}
+
+void test_async_accessory_switched_again_turns_previous_coil_off()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 50);
+    echoAccessories();
+    ctrl.setAccessoryAsync(true);
+    g_millis = 0xFFFFFF00UL; // pulse across the millis() wrap-around
+
+    ctrl.setTurnout(0x3000, true);
+    ctrl.setTurnout(0x3001, true);
+    ctrl.setTurnout(0x3000, false); // straight coil off first, then round on
+    TEST_ASSERT_EQUAL_size_t(4, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(ACC_STRAIGHT, bus->sent[2].data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0, bus->sent[2].data[5]);
+    TEST_ASSERT_EQUAL_HEX8(ACC_ROUND, bus->sent[3].data[4]);
+    TEST_ASSERT_EQUAL_HEX8(1, bus->sent[3].data[5]);
+    TEST_ASSERT_EQUAL_UINT8(2, ctrl.pendingAccessories());
+
+    g_millis += 2000; // wraps
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_UINT8(0, ctrl.pendingAccessories());
+    TEST_ASSERT_EQUAL_size_t(6, bus->sent.size());
+
+    // Back to blocking: waits, and end() leaves no coil on.
+    ctrl.setTurnout(0x3002, true);
+    TEST_ASSERT_EQUAL_UINT8(1, ctrl.pendingAccessories());
+    ctrl.end();
+    TEST_ASSERT_EQUAL_UINT8(0, ctrl.pendingAccessories());
+    ctrl.setAccessoryAsync(false);
+    const size_t before = bus->sent.size();
+    ctrl.setTurnout(0x3002, false);
+    TEST_ASSERT_EQUAL_size_t(before + 2, bus->sent.size()); // on + off
+}
+
 void test_accessory_command_line_reads_the_power()
 {
     TrackController ctrl(*bus, 0xDF24, false, 10);
@@ -659,6 +725,8 @@ int main()
     RUN_TEST(test_begin_sends_the_wake_up_once_without_waiting);
     RUN_TEST(test_track_message_print_parse_round_trip);
     RUN_TEST(test_accessory_returns_the_real_result);
+    RUN_TEST(test_async_accessory_switches_off_in_poll);
+    RUN_TEST(test_async_accessory_switched_again_turns_previous_coil_off);
     RUN_TEST(test_accessory_command_line_reads_the_power);
     RUN_TEST(test_s88_with_32_modules);
     RUN_TEST(test_message_builder_and_uid);

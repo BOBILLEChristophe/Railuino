@@ -51,6 +51,7 @@ void setup()
   while (!Serial)
     ;
   ctrl.begin(CAN_RX, CAN_TX);
+  ctrl.setAccessoryAsync(true); // turnouts: switch-off sent by poll()
   Serial.println(F("Ready. Type a command, e.g. power 1 (help for the list)"));
 }
 
@@ -73,5 +74,5 @@ void loop()
     else if (length < CommandParser::MAX_LINE)
       line[length++] = c;
   }
-  ctrl.poll(); // keeps the CAN receive queue empty
+  ctrl.poll(); // CAN receive queue, turnout switch-offs
 }
