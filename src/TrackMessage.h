@@ -20,6 +20,7 @@
  #define TRACKCMESSAGE_H
  
  #include <Arduino.h>
+ #include <Printable.h>
  
  /**
   * Represents a message going through the Marklin CAN bus. More or
@@ -30,9 +31,8 @@
   * it can be directly used in Serial.println(), for instance. It
   * can also be converted from a String.
   */
- class TrackMessage
+ class TrackMessage : public Printable
  {
- private:
  public:
      /**
       * The priority number.
@@ -74,7 +74,7 @@
       * optional beyond what the message length specifies. Exactly one
       * whitespace is inserted between different fields as a separator.
       */
-     size_t printTo(Print &p) const;
+     size_t printTo(Print &p) const override;
      /**
       * Parses the message from the given String. Returns true on
       * success, false otherwise. The message must have exactly the
@@ -85,7 +85,12 @@
      bool parseFrom(String &s);
  
      static size_t printHex(Print &p, uint32_t hex, uint16_t digits);
-     static uint8_t parseHex(String &s, uint8_t start, uint8_t end, bool *ok);
+     /**
+      * Parses the hexadecimal digits s[start..end[ (at most 4 digits).
+      * On error, sets *ok to false and returns 0; *ok is never set to
+      * true, so one flag can collect the errors of several calls.
+      */
+     static uint16_t parseHex(const String &s, uint8_t start, uint8_t end, bool *ok);
  };
  
  #endif // TRACKCMESSAGE_H

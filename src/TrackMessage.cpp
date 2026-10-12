@@ -36,9 +36,12 @@
     TrackMessage::parseHex
  -------------------------------------------------------------------  */
  
- uint8_t TrackMessage::parseHex(String &s, uint8_t start, uint8_t end, bool *ok)
+ // Returns uint16_t: the hash has 4 hexadecimal digits. With uint8_t
+ // (introduced in 0.91, it was int in 0.9) parseFrom() truncated the hash
+ // to 8 bits, and the error value -1 became 255.
+ uint16_t TrackMessage::parseHex(const String &s, uint8_t start, uint8_t end, bool *ok)
  {
-     uint8_t value = 0;
+     uint16_t value = 0;
  
      for (uint8_t i = start; i < end; i++)
      {
@@ -52,7 +55,7 @@
          else
          {
              *ok = false;
-             return -1;
+             return 0;
          }
      }
      return value;
