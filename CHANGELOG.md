@@ -25,6 +25,8 @@ Fixes from the code audit, without changing the architecture. Numbers refer to t
 - #21 Library files are LGPL 2.1 again (they carried the CC0 header of the examples); `LICENSE` added.
 
 ### Added
+- WiFi credentials of `main.cpp` read from `src/secrets.h` (ignored by Git); template in `src/secrets.h.example`.
+- `CAN_RX_PIN` / `CAN_TX_PIN` in `Config.h`, default pins of `begin()` on ESP32.
 - `setTimeout()`, `getTimeout()`, `DEFAULT_TIMEOUT`, `CV_TIMEOUT`.
 - `RAILUINO_MCP2515_QUARTZ`, `RAILUINO_MCP2515_CS`, `RAILUINO_MCP2515_INT` build flags for AVR (#10).
 - Host tests in `extras/host_tests` (`sh extras/host_tests/run.sh`).
