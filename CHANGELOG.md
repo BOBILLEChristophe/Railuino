@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.12.0 — unreleased (phase 4: modern API)
+## 0.13.0 — unreleased (phase 5: MFX registration)
+
+### Added
+- `MfxRegistry`: table of the MFX locomotives (UID -> SID -> Loc-ID), kept across restarts (`save()` / `load()` / `setAutoSave(true)`: Preferences on ESP32, EEPROM on AVR).
+  - Observer mode (default), with an MS2 or CS2 on the bus: sends nothing, learns the addresses from the Bind messages of the MS2. `locIdOf(uid)` gives the current address of a locomotive even after the MS2 changed its SID.
+  - Master mode, without MS2: Discovery -> Bind -> Verify with 3 tries, based on rocrail_mfx_discovery v0.4 by Christophe Bobille; same SID for a known locomotive; `forceReRegistration()`.
+- `TrackController::poll()` also runs the registry; `locoDiscovery()` starts a discovery through it.
+- Examples `03.Mfx/MfxObserver` and `03.Mfx/MfxMaster`.
+- 5 unit tests (29 in total), including the frames seen on the layout.
+
+### Changed
+- `setPower(true)` no longer sends the MFX re-registration counter (value 3, inherited from 0.9): changing it made the locomotives register again, and an MS2 could then give them new SIDs. `setMfxCounterOnPowerOn(true)` restores the old behaviour.
+- `locoDiscovery()` no longer sends a hard-coded UID and no longer blocks for 60 s.
+
+### Removed
+- `extras/archive/MFX_discovery.ino.txt`, replaced by `MfxRegistry`; the v0.4 program is kept in `extras/reference`.
+
+## 0.12.0 — 2026-10-12 (phase 4: modern API)
 
 ### Added
 - `MarklinProtocol.h`: protocol constants in the `Marklin` namespace (`Cmd::Speed`, `SysCmd::Go`, `Addr::MFX`, `Direction::Toggle`...). The `Config.h` macros stay for existing sketches.

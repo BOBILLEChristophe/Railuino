@@ -77,6 +77,25 @@ Pour recevoir les messages des autres appareils (MS2, rétrosignalisation…), e
 
 Le constructeur prend toujours le hash en premier : `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`. Pour changer seulement le délai d'attente : `ctrl.setTimeout(500)`.
 
+## Locomotives MFX
+
+Une loco MFX n'a pas d'adresse fixe : la centrale lui donne un numéro (SID), et l'adresse à utiliser est `0x4000 + SID`. `MfxRegistry` tient la table UID (fixe, propre au décodeur) → adresse :
+
+- **avec une MS2** (mode observateur, par défaut) : la MS2 inscrit les locos, Railuino écoute et apprend leurs adresses ; `mfx.locIdOf(0xFFE9B194)` donne l'adresse actuelle de la loco, même si la MS2 l'a changée ;
+- **sans MS2** (mode maître) : Railuino inscrit lui-même les locos (Discovery → Bind → Verify).
+
+```cpp
+MfxRegistry mfx(ctrl);          // ou (ctrl, MfxRegistry::Mode::Master)
+// setup() :
+mfx.setAutoSave(true);          // table gardée après un redémarrage
+mfx.begin();
+// loop() :
+ctrl.poll();
+ctrl.setLocoSpeed(mfx.locIdOf(0xFFE9B194), 300);
+```
+
+Voir `examples/03.Mfx`.
+
 ## Exemples
 
 Dans `examples/01.Controller` :
@@ -124,6 +143,7 @@ Arduino / PlatformIO library to control a Märklin layout through its CAN bus (G
 
 - Install with PlatformIO: `lib_deps = https://github.com/BOBILLEChristophe/Railuino.git`, or add the repository ZIP in the Arduino IDE (plus ACAN_ESP32 or ACAN2515).
 - Include `<Railuino.h>` only. Incoming messages (MS2, feedback): `onMessage()` + `poll()`, see the `Monitor` example; text commands: `CommandParser`; protocol constants: `MarklinProtocol.h`. The constructor always takes the hash first: `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`.
+- MFX: `MfxRegistry` keeps UID -> Loc-ID; observer mode with an MS2 (learns its Bind messages), master mode without (Discovery, Bind, Verify). See `examples/03.Mfx`.
 - CAN drivers: `Esp32TwaiDriver` (ESP32 default) and `Mcp2515Driver` (AVR default, also on ESP32). Pass one to `TrackController(can, hash)` to choose; derive `CanDriver` for another controller. ESP32 pins go to `begin(rx, tx)`; default MCP2515 settings: `RAILUINO_MCP2515_QUARTZ`, `_CS`, `_INT`.
 - Examples are in `examples/01.Controller` (see the table above). TcpCommand and WebControl need an ESP32 and a `secrets.h` file created from `secrets.h.example`.
 - Development: `platformio.ini` builds one example against `src/`; `pio test -e native` runs the unit tests; `sh extras/build_examples.sh` builds every example. GitHub Actions runs both on every push.
