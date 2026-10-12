@@ -17,3 +17,15 @@ for f in TrackController TrackMessage TrackReporterS88; do
     c++ -std=gnu++11 -Wall -Wextra -DARDUINO_ARCH_AVR -I"$HERE/stubs" -I"$SRC" -c "$SRC/$f.cpp" -o /dev/null
 done
 echo "AVR flavour compiles"
+
+# Examples: each sketch is compiled (not linked) with both flavours, to check
+# that it only needs <Railuino.h>. ESP32-only sketches (WiFi) are skipped.
+for ino in "$HERE"/../../examples/*/*/*.ino; do
+    name=$(basename "$ino" .ino)
+    case "$name" in WebControl | TcpCommand) continue ;; esac
+    for arch in ARDUINO_ARCH_ESP32 ARDUINO_ARCH_AVR; do
+        printf '#include <Arduino.h>\n#include "%s"\n' "$ino" > "$OUT.example.cpp"
+        c++ -std=gnu++11 -Wall -Wextra -D$arch -I"$HERE/stubs" -I"$SRC" -c "$OUT.example.cpp" -o /dev/null
+    done
+    echo "example $name compiles"
+done

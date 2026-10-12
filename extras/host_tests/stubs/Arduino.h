@@ -65,6 +65,11 @@ public:
     long toInt() const { return atol(s.c_str()); }
     bool startsWith(const char *p) const { return s.rfind(p, 0) == 0; }
     const char *c_str() const { return s.c_str(); }
+    void trim() {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        size_t b = s.find_last_not_of(" \t\r\n");
+        s = (a == std::string::npos) ? std::string() : s.substr(a, b - a + 1);
+    }
 };
 
 // ---- Print / Printable -----------------------------------------------------
@@ -92,5 +97,16 @@ public:
     template <typename T> size_t println(T v) { size_t n = print(v); return n + print("\n"); }
     template <typename T> size_t println(T v, int base) { size_t n = print(v, base); return n + print("\n"); }
     size_t println() { return print("\n"); }
+    // Serial-like helpers used by the examples.
+    std::string in;
+    void begin(unsigned long) {}
+    explicit operator bool() const { return true; }
+    int available() const { return (int)in.size(); }
+    String readStringUntil(char c) {
+        size_t p = in.find(c);
+        String r(in.substr(0, p));
+        in = (p == std::string::npos) ? std::string() : in.substr(p + 1);
+        return r;
+    }
 };
 extern Print Serial;
