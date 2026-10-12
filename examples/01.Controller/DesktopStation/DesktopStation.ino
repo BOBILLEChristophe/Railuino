@@ -1,6 +1,10 @@
 /*
  * Railuino - Desktop Station serial gateway
  *
+ * Copyright (C) 2013 Yaasan
+ * Copyright (C) 2026 Uwe Monreal
+ * Copyright (C) 2026 christophe bobille
+ *
  * Original gateway by Yaasan (2013), ported to ESP32 by Uwe Monreal
  * (Serial_RS5_ESP32_LED, May 2026, pull request #1), adapted to the
  * Railuino library by Christophe Bobille.
