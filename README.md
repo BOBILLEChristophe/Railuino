@@ -134,7 +134,7 @@ Historique des changements : [CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 Bibliothèque (`src/`) : GNU LGPL 2.1 ou ultérieure, voir [LICENSE](LICENSE). Exemples : Creative Commons Zero.
-Copyright (C) 2012 Joerg Pleumann, (C) 2024 Christophe Bobille, (C) 2026 Uwe Monreal.
+Copyright (C) 2012 Joerg Pleumann, (C) 2024 – 2026 Christophe Bobille, (C) 2026 Uwe Monreal.
 
 ---
 
