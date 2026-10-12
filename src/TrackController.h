@@ -25,6 +25,16 @@
 #include "TrackMessage.h"
 #include "Config.h"
 #include "CanDriver.h"
+#include "MarklinProtocol.h"
+
+/**
+ * Function called for every message received from the bus that is not
+ * the answer to one of our own requests: commands sent by an MS2 or a
+ * CS2, feedback events, pings... 'context' is the pointer given to
+ * TrackController::onMessage(). Must not call TrackController methods
+ * that wait for an answer (it is called from inside them).
+ */
+typedef void (*TrackMessageHandler)(const TrackMessage &message, void *context);
 
 // ===================================================================
 // === TrackController ===============================================
@@ -56,10 +66,10 @@ private:
    */
   uint16_t mHash;
   /**
-   * Stores the debug flag. When debugging is on, all outgoing and
-   * incoming messages are printed to the Serial console.
+   * Where traces go (all messages in debug mode, and errors). nullptr:
+   * no output. Set to &Serial when debug is true, or with setLog().
    */
-  bool mDebug;
+  Print *mLog;
   /**
    * Holds the loopback flag. When loopback is on, messages are
    * reflected by the CAN controller. No external communication
@@ -72,6 +82,15 @@ private:
    * uint32_t matches the type returned by millis().
    */
   uint32_t mTimeout;
+
+  /**
+   * Called for every received message that is not an awaited answer.
+   */
+  TrackMessageHandler mHandler;
+  void *mHandlerContext;
+
+  void logFrame(const char *direction, const CanFrame &frame);
+  void dispatch(const TrackMessage &message);
 
 public:
   /**
@@ -152,9 +171,32 @@ public:
 
   /**
    * Reflects whether the TrackController is in debug mode,
-   * where all messages are dumped to the Serial console.
+   * where all messages are dumped to the log (Serial by default).
    */
   bool isDebug() const;
+
+  /**
+   * Sends the traces (all messages and errors) to 'log' instead of
+   * Serial, e.g. Serial1 or a TCP client; nullptr disables them.
+   * Same as debug mode on, but with another output.
+   */
+  void setLog(Print *log);
+  Print *getLog() const;
+
+  /**
+   * Registers a function called for every received message that is not
+   * the answer to one of our requests (MS2 commands, feedback events...).
+   * Messages are processed by poll() and while waiting for answers.
+   *   void onCan(const TrackMessage &m, void *) { Serial.println(m); }
+   *   ctrl.onMessage(onCan);
+   */
+  void onMessage(TrackMessageHandler handler, void *context = nullptr);
+
+  /**
+   * Reads every message waiting in the CAN driver and passes it to the
+   * onMessage() handler. Call it often from loop().
+   */
+  void poll();
 
   /**
    * Reflects whether the TrackController is in loopback mode,
@@ -253,7 +295,7 @@ public:
    *  L'énergie électrique reste disponible.
    */
   // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.3 Commande : System Halt
-  bool systemHalt(const uint16_t address);
+  bool systemHalt(const uint32_t address);
 
   /**
    *  Cette commande qui n'existait pas a l'origine a ete ajoutee
@@ -274,20 +316,21 @@ public:
    * If this locomotive is not already in the cycle, it will not be taken into account by this command.
    */
   // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.4 Commande : Arrêt d'urgence de la locomotive
-  bool emergency(const uint16_t address);
+  bool emergency(const uint32_t address);
 
   /**
    * Sets the direction of the given locomotive. Valid directions
    * are those specified by the DIR_* constants. The return value
    * reflects whether the call was successful.
    */
-  bool setLocoDirection(const uint16_t address, uint8_t direction);
+  bool setLocoDirection(const uint32_t address, uint8_t direction);
+  bool setLocoDirection(const uint32_t address, Marklin::Direction direction);
 
   /**
    * Toggles the direction of the given locomotive. This normally
    * includes a full stop.
    */
-  bool toggleLocoDirection(const uint16_t address);
+  bool toggleLocoDirection(const uint32_t address);
 
   /**
    * Sets the speed of the given locomotive. Valid speeds are
@@ -295,7 +338,7 @@ public:
    * all speeds beyond 1000 to 1000. The return value reflects
    * whether the call was successful.
    */
-  bool setLocoSpeed(const uint16_t address, uint16_t speed);
+  bool setLocoSpeed(const uint32_t address, uint16_t speed);
   // bool accelerateLoco(uint16_t address);
   // bool decelerateLoco(uint16_t address);
 
@@ -307,14 +350,14 @@ public:
    * beyond 1 (which then means "on").  The return value reflects
    * whether the call was successful.
    */
-  bool setLocoFunction(const uint16_t address, uint8_t function, uint8_t power);
+  bool setLocoFunction(const uint32_t address, uint8_t function, uint8_t power);
 
   /**
    * Toggles the given function of the given locomotive. Valid
    * functions are 0 to 31, with 0 normally denoting the
    * head/backlight.
    */
-  bool toggleLocoFunction(const uint16_t address, uint8_t function);
+  bool toggleLocoFunction(const uint32_t address, uint8_t function);
 
   /**
    * Switches the given magnetic accessory. Valid position values
@@ -328,7 +371,7 @@ public:
    * Marklin turnouts seems to be 20 ms. The return value reflects
    * whether the call was successful.
    */
-  bool setAccessory(const uint16_t address, uint8_t position, uint8_t power, uint16_t time);
+  bool setAccessory(const uint32_t address, uint8_t position, uint8_t power, uint16_t time);
 
   /**
    * Switches a turnout. This is actually a convenience function
@@ -336,14 +379,14 @@ public:
    * parameters. The return value reflects whether the call was
    * successful.
    */
-  bool setTurnout(const uint16_t address, bool straight);
+  bool setTurnout(const uint32_t address, bool straight);
 
   /**
    * Queries the direction of the given locomotive and writes it
    * into the referenced uint8_t. The return value indicates whether
    * the call was successful and the direction is valid.
    */
-  bool getLocoDirection(const uint16_t address, uint8_t *direction);
+  bool getLocoDirection(const uint32_t address, uint8_t *direction);
 
   /**
    * Queries the speed of the given locomotive and writes it
@@ -351,7 +394,7 @@ public:
    * the call was successful and the speed is valid.
    */
 
-  bool getLocoSpeed(const uint16_t address, uint16_t *speed);
+  bool getLocoSpeed(const uint32_t address, uint16_t *speed);
 
   /**
    * Queries the given function of the given locomotive and writes
@@ -360,7 +403,7 @@ public:
    * that the call will not reflect the original power value sent
    * to the function, but only 0 ("off") or 1 ("on").
    */
-  bool getLocoFunction(const uint16_t address, uint8_t function, uint8_t *power);
+  bool getLocoFunction(const uint32_t address, uint8_t function, uint8_t *power);
 
   /**
    * Queries the given magnetic accessory's state and and writes
@@ -369,7 +412,7 @@ public:
    * that the call will not reflect the original power value sent
    * to the function, but only 0 ("off") or 1 ("on").
    */
-  bool getAccessory(const uint16_t address, uint8_t *position, uint8_t *power);
+  bool getAccessory(const uint32_t address, uint8_t *position, uint8_t *power);
 
   /**
    * Writes the given value to the given config number of the given
@@ -382,7 +425,7 @@ public:
      See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 3.8 Commande : Écrire Config
 
   -------------------------------------------------------------------  */
-  bool writeConfig(const uint16_t address, uint16_t number, uint8_t value);
+  bool writeConfig(const uint32_t address, uint16_t number, uint8_t value);
 
   /**
    * Reads the given config number of the given locomotive into the
@@ -396,7 +439,7 @@ public:
   // (https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf).
   // Uses CV_TIMEOUT (10 s).
 
-  bool readConfig(const uint16_t address, uint16_t number, uint8_t *value);
+  bool readConfig(const uint32_t address, uint16_t number, uint8_t *value);
 
   /**
    * Queries the software version of the track format processor
@@ -406,9 +449,11 @@ public:
   bool getVersion(uint8_t *high, uint8_t *low);
 
   /**
-   * Processes commands received on the serial or TCP port
+   * Processes one text command received on the serial or TCP port.
+   * Kept for compatibility: see CommandParser for the syntax, the
+   * error messages and more commands.
    */
-  void handleUserCommands(String);
+  void handleUserCommands(String command);
 };
 
 #endif // TRACKCONTROLLER_H
