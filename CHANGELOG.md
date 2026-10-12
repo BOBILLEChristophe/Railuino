@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.0 — 2026-10-12 (first published release)
 
 ### Added
 - Example `DesktopStation`: serial gateway for the Desktop Station software, from Uwe Monreal's pull request #1 (Serial_RS5_ESP32_LED, based on Yaasan's gateway), on the current library. Same commands, answers and events as the original; `reset()` and `getS88()` restored; ESP32, Uno and Mega.
