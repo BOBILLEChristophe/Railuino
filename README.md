@@ -51,7 +51,7 @@ lib_deps = https://github.com/BOBILLEChristophe/Railuino.git#v0.14.0
 
 (`#v0.14.0` fixe la version ; sans lui, vous suivez la branche `main`.) Les dépendances (ACAN_ESP32 ou ACAN2515) sont installées automatiquement.
 
-**IDE Arduino** : téléchargez le ZIP de la [dernière version](https://github.com/BOBILLEChristophe/Railuino/releases/latest), puis *Croquis → Inclure une bibliothèque → Ajouter la bibliothèque .ZIP*. Installez aussi ACAN_ESP32 (ESP32) ou ACAN2515 (Uno, Mega) depuis le gestionnaire de bibliothèques.
+**IDE Arduino** : *Outils → Gérer les bibliothèques*, cherchez **Railuino** et cliquez sur *Installer*. Acceptez *Tout installer* pour ajouter aussi ACAN_ESP32 (ESP32) et ACAN2515 (Uno, Mega). Les nouvelles versions apparaissent ensuite dans le gestionnaire.
 
 ## Premier programme
 
@@ -155,7 +155,7 @@ Copyright (C) 2012 Joerg Pleumann, (C) 2024 – 2026 Christophe Bobille, (C) 202
 
 Arduino / PlatformIO library to control a Märklin layout through its CAN bus (Gleisbox, MS2, CS2) from an **ESP32** or an **Arduino Uno / Mega with an MCP2515**. Rewrite of Joerg Pleumann's Railuino 0.9.
 
-- Install with PlatformIO: `lib_deps = https://github.com/BOBILLEChristophe/Railuino.git#v0.14.0`, or add the ZIP of the [latest release](https://github.com/BOBILLEChristophe/Railuino/releases/latest) in the Arduino IDE (plus ACAN_ESP32 or ACAN2515).
+- Install with PlatformIO: `lib_deps = https://github.com/BOBILLEChristophe/Railuino.git#v0.14.0`, or, in the Arduino IDE, *Tools → Manage Libraries*, search for **Railuino** and install it with its dependencies.
 - Include `<Railuino.h>` only. Incoming messages (MS2, feedback): `onMessage()` + `poll()`, see the `Monitor` example; text commands: `CommandParser`; protocol constants: `MarklinProtocol.h`. The constructor always takes the hash first: `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`.
 - MFX: `MfxRegistry` keeps UID -> Loc-ID; observer mode with an MS2 (learns its Bind messages), master mode without (Discovery, Bind, Verify). See `examples/03.Mfx`.
 - CAN drivers: `Esp32TwaiDriver` (ESP32 default) and `Mcp2515Driver` (AVR default, also on ESP32). Pass one to `TrackController(can, hash)` to choose; derive `CanDriver` for another controller. ESP32 pins go to `begin(rx, tx)`; default MCP2515 settings: `RAILUINO_MCP2515_QUARTZ`, `_CS`, `_INT`.

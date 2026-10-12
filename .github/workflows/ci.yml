@@ -55,9 +55,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # "submit": rules for a first registration in the Library Manager.
-      # Change to "update" once Railuino is listed.
+      # "update": Railuino is listed in the Library Manager (since 0.14.0).
       - uses: arduino/arduino-lint-action@v2
         with:
-          library-manager: submit
+          library-manager: update
           compliance: strict
