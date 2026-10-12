@@ -27,6 +27,8 @@
 #include "CanDriver.h"
 #include "MarklinProtocol.h"
 
+class MfxRegistry;
+
 /**
  * Function called for every message received from the bus that is not
  * the answer to one of our own requests: commands sent by an MS2 or a
@@ -88,6 +90,16 @@ private:
    */
   TrackMessageHandler mHandler;
   void *mHandlerContext;
+
+  /**
+   * MFX table fed with the received messages (nullptr: none).
+   */
+  MfxRegistry *mMfx;
+
+  /**
+   * Whether setPower(true) sends the MFX re-registration counter.
+   */
+  bool mMfxCounterOnPowerOn;
 
   void logFrame(const char *direction, const CanFrame &frame);
   void dispatch(const TrackMessage &message);
@@ -199,6 +211,20 @@ public:
   void poll();
 
   /**
+   * Called by MfxRegistry::begin(): the registry then receives every
+   * message, and poll() also runs its state machine.
+   */
+  void setMfxRegistry(MfxRegistry *registry);
+
+  /**
+   * Since 0.13, setPower(true) no longer sends the MFX re-registration
+   * counter (value 3), which made the locomotives register again and
+   * could make an MS2 give them new SIDs. true restores the old
+   * behaviour.
+   */
+  void setMfxCounterOnPowerOn(bool on);
+
+  /**
    * Reflects whether the TrackController is in loopback mode,
    * where all messages are reflected by the CAN controller.
    */
@@ -236,7 +262,8 @@ public:
   void end();
 
   /**
-   *  Recherche de locomotives sur la voie.
+   * Starts an MFX discovery. Needs an MfxRegistry in master mode
+   * (see MfxRegistry.h); returns false otherwise.
    */
   bool locoDiscovery();
 

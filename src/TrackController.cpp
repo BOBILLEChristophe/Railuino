@@ -19,6 +19,7 @@
 
 #include "TrackController.h"
 #include "CommandParser.h"
+#include "MfxRegistry.h"
 
 #include "Esp32TwaiDriver.h"
 #include "Mcp2515Driver.h"
@@ -63,7 +64,9 @@ TrackController::TrackController()
       mLoopback(false),
       mTimeout(DEFAULT_TIMEOUT),
       mHandler(nullptr),
-      mHandlerContext(nullptr)
+      mHandlerContext(nullptr),
+      mMfx(nullptr),
+      mMfxCounterOnPowerOn(false)
 {
 }
 
@@ -76,7 +79,9 @@ TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bo
       mLoopback(loopback),
       mTimeout(timeOut),
       mHandler(nullptr),
-      mHandlerContext(nullptr)
+      mHandlerContext(nullptr),
+      mMfx(nullptr),
+      mMfxCounterOnPowerOn(false)
 {
 }
 
@@ -87,7 +92,9 @@ TrackController::TrackController(CanDriver &can, uint16_t hash, bool debug, uint
       mLoopback(loopback),
       mTimeout(timeOut),
       mHandler(nullptr),
-      mHandlerContext(nullptr)
+      mHandlerContext(nullptr),
+      mMfx(nullptr),
+      mMfxCounterOnPowerOn(false)
 {
 }
 
@@ -122,8 +129,13 @@ void TrackController::onMessage(TrackMessageHandler handler, void *context)
     mHandlerContext = context;
 }
 
+void TrackController::setMfxRegistry(MfxRegistry *registry) { mMfx = registry; }
+void TrackController::setMfxCounterOnPowerOn(bool on) { mMfxCounterOnPowerOn = on; }
+
 void TrackController::dispatch(const TrackMessage &message)
 {
+    if (mMfx != nullptr)
+        mMfx->handle(message);
     if (mHandler != nullptr)
         mHandler(message, mHandlerContext);
 }
@@ -133,6 +145,8 @@ void TrackController::poll()
     TrackMessage message;
     while (receiveMessage(message))
         dispatch(message);
+    if (mMfx != nullptr)
+        mMfx->service();
 }
 
 /* -------------------------------------------------------------------
@@ -395,53 +409,11 @@ void TrackController::generateHash()
 
 /* -------------------------------------------------------------------
    TrackController::locoDiscovery
-   Work in progress (MFX registration, phase 5): frames unchanged.
 -------------------------------------------------------------------  */
 
 bool TrackController::locoDiscovery()
 {
-    if (mLog)
-    {
-        mLog->println(F("###Start discovery"));
-        mLog->println(SEPARATOR);
-    }
-
-    // Bootloader CAN (Gleisbox wake-up)
-    TrackMessage message = TrackMessage::make(Cmd::Bootloader, 0, 5);
-    message.data[4] = GleisboxWakeUp;
-    sendMessage(message);
-    delay(1000);
-
-    // MFX re-registration counter = 7
-    message = TrackMessage::makeSystem(SysCmd::MfxRegCounter, 0, 7);
-    message.data[6] = 0x07;
-    sendMessage(message);
-    delay(1000);
-
-    // MFX Verify (to cause an unbind)
-    message = TrackMessage::make(Cmd::Verify, 0, 6);
-    sendMessage(message);
-    delay(1000);
-
-    // System Go
-    message = TrackMessage::makeSystem(SysCmd::Go);
-    sendMessage(message);
-    delay(1000);
-
-    // Locomotive discovery (UID of a test locomotive, MFX range 0x20)
-    message = TrackMessage::make(Cmd::Discovery, 0xF9E60120UL, 5);
-    message.data[4] = 0x20;
-
-    if (!exchangeMessage(message, message, 60UL * 1000UL))
-        return false;
-
-    if (mLog)
-    {
-        mLog->print(F("UID : 0x"));
-        TrackMessage::printHex(*mLog, message.uid(), 8);
-        mLog->println();
-    }
-    return true;
+    return mMfx != nullptr && mMfx->startDiscovery();
 }
 
 /* -------------------------------------------------------------------
@@ -467,14 +439,18 @@ bool TrackController::setPower(bool power)
 
     if (power)
     {
-        // MFX re-registration counter = 3 (as in Railuino 0.9).
-        message = TrackMessage::makeSystem(SysCmd::MfxRegCounter, 0, 7);
-        message.data[6] = 0x03;
-        if (!exchangeMessage(message, message, mTimeout))
+        // MFX re-registration counter = 3, as in Railuino 0.9, only on
+        // request: changing it makes the locomotives register again.
+        if (mMfxCounterOnPowerOn)
         {
-            if (mLog)
-                mLog->println(F("Failed to reset re-registration counter"));
-            return false;
+            message = TrackMessage::makeSystem(SysCmd::MfxRegCounter, 0, 7);
+            message.data[6] = 0x03;
+            if (!exchangeMessage(message, message, mTimeout))
+            {
+                if (mLog)
+                    mLog->println(F("Failed to reset re-registration counter"));
+                return false;
+            }
         }
 
         // Enable MM2, MFX and DCC on the track.

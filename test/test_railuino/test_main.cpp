@@ -421,6 +421,182 @@ void test_command_parser_reports_no_answer()
     TEST_ASSERT_EQUAL_STRING("error: no answer from the layout\n", out.out.c_str());
 }
 
+// ---------------------------------------------------------------- phase 5: MFX
+
+static CanFrame mfxFrame(uint8_t cmd, bool response, uint16_t hash, uint32_t uid, uint16_t sid, int ask = -1)
+{
+    CanFrame f;
+    f.id = (uint32_t(cmd) << 17) | (response ? (1UL << 16) : 0) | hash;
+    f.len = ask < 0 ? 6 : 7;
+    f.data[0] = uid >> 24;
+    f.data[1] = uid >> 16;
+    f.data[2] = uid >> 8;
+    f.data[3] = uid;
+    f.data[4] = sid >> 8;
+    f.data[5] = sid;
+    if (ask >= 0)
+        f.data[6] = ask;
+    return f;
+}
+
+static CanFrame discoveryAnswer(uint32_t uid)
+{
+    CanFrame f;
+    f.id = (0x01UL << 17) | (1UL << 16) | 0x3363;
+    f.len = 5;
+    f.data[0] = uid >> 24;
+    f.data[1] = uid >> 16;
+    f.data[2] = uid >> 8;
+    f.data[3] = uid;
+    f.data[4] = 0x20;
+    return f;
+}
+
+static int changes = 0;
+static uint16_t lastLocId = 0;
+static void onMfxChange(uint32_t, uint16_t locId, void *)
+{
+    changes++;
+    lastLocId = locId;
+}
+
+void test_mfx_observer_learns_from_the_ms2()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl);
+    mfx.begin();
+    changes = 0;
+    mfx.onChange(onMfxChange);
+
+    // The MS2 (8B23) binds UID FFE9B194 to SID 7, the Gleisbox answers.
+    bus->rx.push_back(mfxFrame(0x02, false, 0x8B23, 0xFFE9B194UL, 7));
+    bus->rx.push_back(mfxFrame(0x02, true, 0x3363, 0xFFE9B194UL, 7));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4007, mfx.locIdOf(0xFFE9B194UL));
+    TEST_ASSERT_EQUAL_HEX32(0xFFE9B194UL, mfx.uidOf(0x4007));
+    TEST_ASSERT_EQUAL_HEX32(0xFFE9B194UL, mfx.uidOf(7));
+    TEST_ASSERT_EQUAL_INT(1, changes);
+    TEST_ASSERT_EQUAL_HEX16(0x4007, lastLocId);
+
+    // Later the MS2 gives it SID 9: the table follows.
+    bus->rx.push_back(mfxFrame(0x02, false, 0x8B23, 0xFFE9B194UL, 9));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4009, mfx.locIdOf(0xFFE9B194UL));
+    TEST_ASSERT_EQUAL_INT(2, changes);
+
+    // Another loco takes SID 9: the first one is no longer valid.
+    bus->rx.push_back(mfxFrame(0x02, false, 0x8B23, 0x11223344UL, 9));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4009, mfx.locIdOf(0x11223344UL));
+    TEST_ASSERT_EQUAL_HEX16(0, mfx.locIdOf(0xFFE9B194UL));
+    TEST_ASSERT_EQUAL_UINT8(2, mfx.size());
+
+    // An observer never sends anything.
+    TEST_ASSERT_TRUE(bus->sent.empty());
+}
+
+void test_mfx_observer_ignores_discovery_and_verify_sid_0()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl);
+    mfx.begin();
+    bus->rx.push_back(discoveryAnswer(0xFFE9B194UL));
+    bus->rx.push_back(mfxFrame(0x03, true, 0x3363, 0xFFE9B194UL, 0, 1));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_UINT8(0, mfx.size());
+    TEST_ASSERT_TRUE(bus->sent.empty());
+    TEST_ASSERT_FALSE(mfx.startDiscovery());
+}
+
+void test_mfx_master_discovery_bind_verify()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
+    mfx.begin(); // start sequence: Stop, wake-up, counter, Verify, Go, Discovery
+    TEST_ASSERT_EQUAL_size_t(6, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x00, commandOf(bus->sent[0]));
+    TEST_ASSERT_EQUAL_HEX8(0x1B, commandOf(bus->sent[1]));
+    TEST_ASSERT_EQUAL_HEX8(0x09, bus->sent[2].data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x03, commandOf(bus->sent[3]));
+    TEST_ASSERT_EQUAL_HEX8(0x01, bus->sent[4].data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, commandOf(bus->sent[5]));
+    bus->sent.clear();
+
+    // The Gleisbox finds the loco: Bind with SID 5.
+    bus->rx.push_back(discoveryAnswer(0xFFE9B194UL));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_size_t(1, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x02, commandOf(bus->sent[0]));
+    const uint8_t bind[6] = {0xFF, 0xE9, 0xB1, 0x94, 0x00, 0x05};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(bind, bus->sent[0].data, 6);
+    TEST_ASSERT_EQUAL_HEX16(0, mfx.locIdOf(0xFFE9B194UL)); // not confirmed yet
+
+    // Echo of our Bind, then Verify after 20 ms.
+    bus->rx.push_back(mfxFrame(0x02, true, 0x3363, 0xFFE9B194UL, 5));
+    g_millis += 25;
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX8(0x03, commandOf(bus->sent.back()));
+
+    // Verify answer with SID 0 (seen on the layout): ignored.
+    bus->rx.push_back(mfxFrame(0x03, true, 0x3363, 0xFFE9B194UL, 0, 1));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0, mfx.locIdOf(0xFFE9B194UL));
+
+    // Verify answer with SID 5: confirmed.
+    bus->rx.push_back(mfxFrame(0x03, true, 0x3363, 0xFFE9B194UL, 5, 1));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4005, mfx.locIdOf(0xFFE9B194UL));
+
+    // The loco announces itself again: same SID.
+    bus->sent.clear();
+    bus->rx.push_back(discoveryAnswer(0xFFE9B194UL));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX8(0x02, commandOf(bus->sent.back()));
+    TEST_ASSERT_EQUAL_HEX8(0x05, bus->sent.back().data[5]);
+
+    // A second loco gets SID 6.
+    bus->rx.push_back(discoveryAnswer(0x11223344UL));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX8(0x06, bus->sent.back().data[5]);
+}
+
+void test_mfx_master_gives_up_after_3_tries()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
+    ctrl.setMfxRegistry(&mfx); // without the start sequence
+    bus->rx.push_back(discoveryAnswer(0xFFE9B194UL));
+    for (int i = 0; i < 20; i++)
+    {
+        ctrl.poll();
+        g_millis += 600;
+    }
+    TEST_ASSERT_EQUAL_INT(3, bus->countSent(0x02));
+    TEST_ASSERT_EQUAL_INT(3, bus->countSent(0x03));
+    TEST_ASSERT_EQUAL_STRING("FAILED", MfxRegistry::stateName(mfx.entry(0).state));
+}
+
+void test_set_power_no_longer_sends_the_mfx_counter()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 10);
+    bus->onSend = [](const CanFrame &f) {
+        CanFrame a = f;
+        a.id |= (1UL << 16);
+        bus->rx.push_back(a);
+    };
+    TEST_ASSERT_TRUE(ctrl.setPower(true));
+    for (const CanFrame &f : bus->sent)
+        TEST_ASSERT_FALSE(commandOf(f) == 0x00 && f.data[4] == 0x09);
+
+    bus->sent.clear();
+    ctrl.setMfxCounterOnPowerOn(true);
+    TEST_ASSERT_TRUE(ctrl.setPower(true));
+    bool counter = false;
+    for (const CanFrame &f : bus->sent)
+        counter = counter || (commandOf(f) == 0x00 && f.data[4] == 0x09 && f.data[6] == 0x03);
+    TEST_ASSERT_TRUE(counter);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -448,5 +624,10 @@ int main()
     RUN_TEST(test_direction_enum);
     RUN_TEST(test_command_parser);
     RUN_TEST(test_command_parser_reports_no_answer);
+    RUN_TEST(test_mfx_observer_learns_from_the_ms2);
+    RUN_TEST(test_mfx_observer_ignores_discovery_and_verify_sid_0);
+    RUN_TEST(test_mfx_master_discovery_bind_verify);
+    RUN_TEST(test_mfx_master_gives_up_after_3_tries);
+    RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
     return UNITY_END();
 }
