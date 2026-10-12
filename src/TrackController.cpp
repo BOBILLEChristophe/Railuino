@@ -307,13 +307,16 @@ bool TrackController::isResponseTo(const TrackMessage &out, const TrackMessage &
         if (out.length >= 5 && in.data[4] != out.data[4])
             return false;
         // fall through
+    case Cmd::Bind:
+    case Cmd::Verify:
     case Cmd::Speed:
     case Cmd::Direction:
     case Cmd::Function:
     case Cmd::ReadConfig:
     case Cmd::WriteConfig:
     case Cmd::Accessory:
-        // The response must concern the same locomotive / accessory.
+        // The response must concern the same locomotive / accessory
+        // (or the same MFX UID for Bind and Verify).
         // Without this check, the answer for another locomotive (sent
         // by an MS2 on the same bus) could be taken as ours.
         return in.uid() == out.uid();

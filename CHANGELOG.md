@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.13.0 — unreleased (phase 5: MFX registration)
+## Unreleased
+
+### Added
+- Example `DesktopStation`: serial gateway for the Desktop Station software, from Uwe Monreal's pull request #1 (Serial_RS5_ESP32_LED, based on Yaasan's gateway), on the current library. Same commands, answers and events as the original; `reset()` and `getS88()` restored; ESP32, Uno and Mega.
+
+### Changed
+- `exchangeMessage()` also checks the UID of the answers to MFX Bind and Verify.
+
+## 0.13.0 — 2026-10-12 (phase 5: MFX registration)
 
 ### Added
 - `MfxRegistry`: table of the MFX locomotives (UID -> SID -> Loc-ID), kept across restarts (`save()` / `load()` / `setAutoSave(true)`: Preferences on ESP32, EEPROM on AVR).

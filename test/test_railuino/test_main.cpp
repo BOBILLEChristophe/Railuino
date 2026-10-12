@@ -597,6 +597,27 @@ void test_set_power_no_longer_sends_the_mfx_counter()
     TEST_ASSERT_TRUE(counter);
 }
 
+void test_bind_answer_for_another_uid_is_ignored()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 50);
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) != 0x02)
+            return;
+        bus->rx.push_back(mfxFrame(0x02, true, 0x3363, 0x11223344UL, 7)); // other loco
+    };
+    TrackMessage m = TrackMessage::make(Marklin::Cmd::Bind, 0xFFE9B194UL, 6);
+    m.data[5] = 7;
+    TEST_ASSERT_FALSE(ctrl.exchangeMessage(m, m, 50));
+
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x02)
+            bus->rx.push_back(mfxFrame(0x02, true, 0x3363, 0xFFE9B194UL, 7));
+    };
+    m = TrackMessage::make(Marklin::Cmd::Bind, 0xFFE9B194UL, 6);
+    m.data[5] = 7;
+    TEST_ASSERT_TRUE(ctrl.exchangeMessage(m, m, 50));
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -629,5 +650,6 @@ int main()
     RUN_TEST(test_mfx_master_discovery_bind_verify);
     RUN_TEST(test_mfx_master_gives_up_after_3_tries);
     RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
+    RUN_TEST(test_bind_answer_for_another_uid_is_ignored);
     return UNITY_END();
 }
