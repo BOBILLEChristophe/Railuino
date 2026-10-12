@@ -1,140 +1,111 @@
 # Railuino
- Rewrite of version 0.9.0 of Joerg Pleumann's Railuino library
 
- https://youtu.be/x5fVPsChlIA
+Bibliothèque Arduino / PlatformIO pour piloter un réseau Märklin par son bus CAN (Gleisbox, MS2, CS2) depuis un **ESP32** ou un **Arduino Uno / Mega avec un MCP2515**.
+Réécriture de la version 0.9 de la bibliothèque [Railuino](https://code.google.com/archive/p/railuino/) de Joerg Pleumann.
 
-Version 0.9.1 de la bibliothèque Railuino de Joerg Pleumann dont le dépôt git se trouve à cet emplacement : https://code.google.com/archive/p/railuino/
+*English below.*
 
-Cette bibliothèque est sous licence GNU LESSER GENERAL PUBLIC LICENSE - Version 2.1, February 1999
+Vidéo : https://youtu.be/x5fVPsChlIA
 
-Copyright (C) 2012 Joerg Pleumann
+## Ce que fait la bibliothèque
 
-Cette version 9.0.1 est une réécriture profonde à partir de la version 0.9.0, dernière version publiée à ma connaissance.
+- Marche / arrêt de la voie, arrêt d'urgence d'une locomotive
+- Locomotives MM2, MFX et DCC : vitesse, sens de marche, fonctions
+- Aiguillages et accessoires
+- Lecture et écriture des CV des décodeurs
+- Rétrosignalisation S88
 
-Dans sa version 0.9.0, cette bibliothèque est très bien écrite mais elle est ancienne (2013, c’est beaucoup en programmation), elle n’est pas adaptée aux nouveaux microcontrôleurs comme l’ESP32, comporte quelques manques (comme la reconnaissance automatique en MFX) et doit être optimisée par rapport aux normes C++ 11 et suivantes. Je suis actuellement en train de réécrire certaines parties de cette bibliothèque que je teste au fur et à mesure.
+## Cartes prises en charge
 
-Je ne m’intéresse actuellement qu’à la version ESP32. Je publie mon travail sur ce git à chaque évolution majeure.
+| Carte | Contrôleur CAN | Bibliothèque CAN |
+| --- | --- | --- |
+| ESP32 | TWAI intégré + transceiver (SN65HVD230…) | [ACAN_ESP32](https://github.com/pierremolinaro/acan-esp32) ≥ 3.0.3 |
+| Arduino Uno, Mega | MCP2515 sur le bus SPI | [ACAN2515](https://github.com/pierremolinaro/acan2515) ≥ 2.1.3 |
 
-Les exemples originaux pour la mise en œuvre et les tests de cette bibliothèque sont encore d’actualité mais doivent aussi être adaptés.
+Sur AVR, le quartz et les broches du MCP2515 se changent sans modifier la bibliothèque, par exemple dans `platformio.ini` :
 
-Vous trouverez dans le dossier « exemples » les fichiers mis à jour qui portent les noms originaux auxquels j’ai ajouté « _new ».
+```ini
+build_flags = -D RAILUINO_MCP2515_QUARTZ=8000000UL -D RAILUINO_MCP2515_CS=10 -D RAILUINO_MCP2515_INT=2
+```
 
-Les fichiers originaux sont conservés à titre de mémoire et de comparaison.
+## Installation
 
-*****************************************************************************************************
+**PlatformIO** : dans le `platformio.ini` de votre projet
 
-Version 0.9.1 of Joerg Pleumann's Railuino library, the git repository for which can be found at: https://code.google.com/archive/p/railuino/
+```ini
+lib_deps = https://github.com/BOBILLEChristophe/Railuino.git
+```
 
-This library is licensed under the GNU LESSER GENERAL PUBLIC LICENSE - Version 2.1, February 1999
+**IDE Arduino** : *Croquis → Inclure une bibliothèque → Ajouter la bibliothèque .ZIP*, avec le ZIP du dépôt. Installez aussi ACAN_ESP32 (ESP32) ou ACAN2515 (Uno, Mega) depuis le gestionnaire de bibliothèques.
 
-Copyright (C) 2012 Joerg Pleumann
+## Premier programme
 
-This version 9.0.1 is a thorough rewrite of version 0.9.0, the last version published to my knowledge.
+```cpp
+#include <Railuino.h>
 
-In its version 0.9.0, this library is very well written but it is old (2013 is a long time in programming), it is not adapted to new microcontrollers such as the ESP32, has a few shortcomings (such as automatic recognition in MFX) and needs to be optimised in relation to the C++ 11 and later standards. I'm currently rewriting parts of this library and testing them as I go along.
+const uint8_t CAN_RX = 22; // ESP32 uniquement, ignoré sur Uno/Mega
+const uint8_t CAN_TX = 23;
+const uint16_t LOCO = ADDR_MFX + 7;
 
-I'm currently only interested in the ESP32 version. I publish my work on this git whenever there is a major change.
+TrackController ctrl(0xDF24); // hash ; 0 = généré automatiquement
 
-The original examples for implementing and testing this library are still relevant, but they also need to be adapted.
+void setup() {
+  Serial.begin(115200);
+  ctrl.begin(CAN_RX, CAN_TX);
+  ctrl.setPower(true);
+  ctrl.setLocoFunction(LOCO, 0, 1); // feux
+  ctrl.setLocoSpeed(LOCO, 300);     // 0 à 1000
+}
 
-You'll find the updated files in the "examples" folder, which have the original names to which I've added "_new".
+void loop() {}
+```
 
-The original files are kept for memory and comparison.
+Le constructeur prend toujours le hash en premier : `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`. Pour changer seulement le délai d'attente : `ctrl.setTimeout(500)`.
 
+## Exemples
 
+Dans `examples/01.Controller` :
 
+| Exemple | Rôle | Cartes |
+| --- | --- | --- |
+| Power | Marche / arrêt toutes les 5 s | toutes |
+| Speed | Fait rouler une loco puis l'arrête | toutes |
+| Direction | Change le sens de marche | toutes |
+| Headlight | Allume et éteint les feux | toutes |
+| Function | Fonctions 0 à 12 une par une | toutes |
+| Turnout | Manœuvre un aiguillage | toutes |
+| CV | Lit les CV d'un décodeur | toutes |
+| TestAddressLoco | Cherche les adresses MFX occupées | toutes |
+| SerialCommand | Commandes texte depuis le moniteur série | toutes |
+| TcpCommand | Mêmes commandes en TCP (port 15731) | ESP32 |
+| WebControl | Interface web (pages dans `data/`) | ESP32 |
 
-TrackController Class Documentation
-Overview
+TcpCommand et WebControl lisent les identifiants WiFi dans un fichier `secrets.h`, à créer dans le dossier de l'exemple à partir de `secrets.h.example`. Ce fichier est ignoré par Git.
 
-The TrackController class abstracts the communication with Märklin model train components using a CAN bus interface. It provides high-level methods for controlling locomotives, turnouts, and accessories, while managing low-level message handling internally. This documentation summarizes the class's functionality and usage patterns for interfacing with model train systems.
+## Développer la bibliothèque
 
-Dependencies
-Arduino.h: Arduino standard library.
-TrackMessage.h: Header for defining CAN message structure.
-Config.h: Configuration file (not provided) for specific settings.
+Le dépôt s'ouvre directement dans VS Code avec PlatformIO. `platformio.ini` compile **un** exemple (WebControl par défaut) avec la bibliothèque de `src/` ; changez `src_dir` pour en essayer un autre.
 
-Constructors
-TrackController();
-Default constructor initializes the controller with default settings.
-TrackController(uint16_t hash, bool debug);
-Constructor with parameters to initialize the controller with a specific hash and debug mode.
-Destructor
-~TrackController();
-Cleans up resources when the object is destroyed.
+- `sh extras/build_examples.sh` : compile tous les exemples pour toutes leurs cartes (PlatformIO).
+- `sh extras/host_tests/run.sh` : tests sur PC, sans carte, avec un bus CAN simulé.
 
-Public Methods
-Initialization and Configuration
-void init(uint16_t hash, bool debug, bool loopback);
+Historique des changements : [CHANGELOG.md](CHANGELOG.md).
 
-Initializes the controller with a specified hash, debug mode, and loopback mode.
-void begin();
+## Licence
 
-Initializes the CAN hardware and starts message reception.
-void end();
+Bibliothèque (`src/`) : GNU LGPL 2.1 ou ultérieure, voir [LICENSE](LICENSE). Exemples : Creative Commons Zero.
+Copyright (C) 2012 Joerg Pleumann, (C) 2024 Christophe Bobille, (C) 2026 Uwe Monreal.
 
-Stops message reception and clears the internal message buffer.
-void generateHash();
+---
 
-Generates a unique hash for the controller to avoid conflicts on the CAN bus.
-Power and Control
-bool setPower(bool power);
+## English
 
-Controls the power state of the track. Stops all locomotives when power is false.
-bool setLocoDirection(uint16_t address, uint8_t direction);
+Arduino / PlatformIO library to control a Märklin layout through its CAN bus (Gleisbox, MS2, CS2) from an **ESP32** or an **Arduino Uno / Mega with an MCP2515**. Rewrite of Joerg Pleumann's Railuino 0.9.
 
-Sets the direction of a locomotive identified by address.
-bool toggleLocoDirection(uint16_t address);
+- Install with PlatformIO: `lib_deps = https://github.com/BOBILLEChristophe/Railuino.git`, or add the repository ZIP in the Arduino IDE (plus ACAN_ESP32 or ACAN2515).
+- Include `<Railuino.h>` only. The constructor always takes the hash first: `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`.
+- ESP32 CAN pins are passed to `begin(rx, tx)`; on AVR the MCP2515 is configured with `RAILUINO_MCP2515_QUARTZ`, `_CS` and `_INT` build flags.
+- Examples are in `examples/01.Controller` (see the table above). TcpCommand and WebControl need an ESP32 and a `secrets.h` file created from `secrets.h.example`.
+- Development: `platformio.ini` builds one example against `src/`; `sh extras/build_examples.sh` builds them all; `sh extras/host_tests/run.sh` runs the host tests.
 
-Toggles the direction of a locomotive identified by address.
-bool setLocoSpeed(uint16_t address, uint16_t speed);
-
-Sets the speed of a locomotive identified by address.
-bool setLocoFunction(uint16_t address, uint8_t function, uint8_t power);
-
-Sets a specific function (e.g., lights) of a locomotive.
-bool toggleLocoFunction(uint16_t address, uint8_t function);
-
-Toggles a function (on/off) of a locomotive.
-bool setAccessory(uint16_t address, uint8_t position, uint8_t power, uint16_t time);
-
-Controls a magnetic accessory (e.g., turnout).
-bool setTurnout(uint16_t address, bool straight);
-
-Controls a turnout to be straight or curved.
-Query Methods
-bool getLocoDirection(uint16_t address, uint8_t *direction);
-
-Queries the direction of a locomotive identified by address.
-bool getLocoSpeed(uint16_t address, uint16_t *speed);
-
-Queries the speed of a locomotive identified by address.
-bool getLocoFunction(uint16_t address, uint8_t function, uint8_t *power);
-
-Queries the status of a specific function of a locomotive.
-bool getAccessory(uint16_t address, uint8_t *position, uint8_t *power);
-
-Queries the state of a magnetic accessory.
-Configuration Methods
-bool writeConfig(uint16_t address, uint16_t number, uint8_t value);
-
-Writes a configuration value to a locomotive.
-bool readConfig(uint16_t address, uint16_t number, uint8_t *value);
-
-Reads a configuration value from a locomotive.
-Utility Methods
-bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout);
-
-Sends a message and waits for a response within the specified timeout.
-bool getVersion(uint8_t *high, uint8_t *low);
-
-Queries the software version of the track format processor.
-
-Member Variables
-uint16_t mHash: Hash of the controller instance.
-bool mDebug: Debug mode flag.
-bool mLoopback: Loopback mode flag.
-
-
-
-
+License: LGPL 2.1 or later for the library, CC0 for the examples.

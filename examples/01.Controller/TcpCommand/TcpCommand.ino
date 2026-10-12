@@ -16,30 +16,36 @@
  */
 
 
-#include "Config.h"
-#include "TrackController.h"
-//----------------------------------------------------------------------------------------
-//   Include files
-//----------------------------------------------------------------------------------------
+/*
+ * Same commands as SerialCommand, received over TCP (port 15731, ESP32 only).
+ * Mêmes commandes que SerialCommand, reçues en TCP (port 15731, ESP32).
+ */
 
-#include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
-#include <Arduino.h>
+#ifndef ARDUINO_ARCH_ESP32
+#error "TcpCommand needs an ESP32 (WiFi) / TcpCommand nécessite un ESP32 (WiFi)"
+#endif
+
 #include <WiFi.h>
+#include <Railuino.h>
 
-const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+// CAN pins / Broches CAN
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
+
 const bool DEBUG = true;
-
-byte cBuffer[13]; // CAN buffer
-byte sBuffer[13]; // Serial buffer
 
 TrackController ctrl(0xDF24, DEBUG);
 
-//----------------------------------------------------------------------------------------
-//  TCP/WIFI-ETHERNET
-//----------------------------------------------------------------------------------------
+// WiFi credentials: copy secrets.h.example to secrets.h (ignored by Git).
+// Identifiants WiFi : copier secrets.h.example en secrets.h (ignoré par Git).
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Copiez secrets.h.example en secrets.h et renseignez votre WiFi / Copy secrets.h.example to secrets.h"
+#endif
+const char *ssid = WIFI_SSID;
+const char *password = WIFI_PASSWORD;
 
-const char *ssid = "**********";
-const char *password = "**********";
 IPAddress ip(192, 168, 1, 103);
 IPAddress gateway(192, 168, 1, 254);
 IPAddress subnet(255, 255, 255, 0);
@@ -68,7 +74,7 @@ void setup()
 
   server.begin();
 
-  ctrl.begin();
+  ctrl.begin(CAN_RX, CAN_TX);
 }
 
 void loop()

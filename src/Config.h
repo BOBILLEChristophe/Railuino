@@ -26,6 +26,9 @@
 
 /**
  * Version of Railuino library and required connection box software.
+ * RAILUINO_VERSION is the historical numeric version, kept for
+ * compatibility; the library version is RAILUINO_VERSION_STRING in
+ * Railuino.h.
  */
 // #define RAILUINO_VERSION 0x005B // 0.91 -> upgrade 0.90 to 0.91 christophe bobille 2024
 // #define RAILUINO_VERSION 0x005C // 0.92 -> upgrade 0.91 to 0.92 christophe bobille 17/07/2024
@@ -35,7 +38,8 @@
 #define RAILUINO_VERSION 0x03B7 // 0.951 -> upgrade 0.95 to 0.951 christophe bobille 05/2026
 #define TRACKBOX_VERSION 0x0127 // 1.39 (tested on a layout with firmware 1.47 = 0x012F)
 
-// Pins for CAN bus on ESP32
+// Default CAN pins on ESP32, used by begin() without arguments.
+// The examples pass their own pins: ctrl.begin(CAN_RX, CAN_TX).
 constexpr uint8_t CAN_RX_PIN = 22;
 constexpr uint8_t CAN_TX_PIN = 23;
 

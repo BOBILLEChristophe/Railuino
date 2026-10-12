@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased — phase 1: fixes
+## 0.10.0 — unreleased (phase 2: library layout)
+
+### Breaking changes
+- Sketches include `<Railuino.h>` instead of `"Config.h"` and `"TrackController.h"` copied next to them.
+- `src/main.cpp` and `data/` moved to the `WebControl` example; its `secrets.h` now lives in the example folder.
+- `TrackReporterIOX.cpp` (empty) removed.
+
+### Added
+- `library.properties` and `library.json`: the repository installs as a library (Arduino IDE, PlatformIO `lib_deps`).
+- `src/Railuino.h`, `RAILUINO_VERSION_STRING`.
+- Examples `Speed` and `Turnout` (ported from 0.9); every example builds for ESP32, Uno and Mega, except `WebControl` and `TcpCommand` (ESP32).
+- `extras/build_examples.sh`: builds every example with PlatformIO. Host tests also compile the examples.
+- `platformio.ini` builds an example against `src/`; ESP32 platform pinned to pioarduino 55.03.312.
+
+### Removed
+- Library copies in `Test_address_loco/` and `Test_address_loco.zip`, `WebCommand`, PlatformIO `include/` template.
+- `MFX_discovery.ino` moved to `extras/archive/` (kept for the MFX work).
+
+## 0.9.6 — 2026-10-12 (phase 1: fixes)
 
 Fixes from the code audit, without changing the architecture. Numbers refer to the audit findings.
 
