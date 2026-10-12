@@ -5,9 +5,16 @@
 # Uses the environments of platformio.ini and overrides src_dir with
 # PLATFORMIO_SRC_DIR. A missing secrets.h is created from secrets.h.example
 # for the build, then removed.
+# Builds go to their own directory (PLATFORMIO_BUILD_DIR), so that VS Code,
+# which may rebuild its index in .pio/build at the same time, cannot
+# delete files in the middle of a build. A failed build is retried once.
 
 cd "$(dirname "$0")/.." || exit 1
 failed=""
+export PLATFORMIO_BUILD_DIR="${TMPDIR:-/tmp}/railuino_examples_build"
+LOG="${TMPDIR:-/tmp}/railuino_build.log"
+
+build() { PLATFORMIO_SRC_DIR="$1" pio run -s -e "$2" > "$LOG" 2>&1; }
 
 for dir in examples/*/*/; do
     dir=${dir%/}
@@ -25,12 +32,12 @@ for dir in examples/*/*/; do
 
     for env in $envs; do
         printf '%-45s %-16s ' "$dir" "$env"
-        if PLATFORMIO_SRC_DIR="$dir" pio run -s -e "$env" > /tmp/railuino_build.log 2>&1; then
+        if build "$dir" "$env" || build "$dir" "$env"; then
             echo "OK"
         else
             echo "FAILED"
             failed="$failed\n  $dir ($env)"
-            tail -20 /tmp/railuino_build.log
+            tail -20 "$LOG"
         fi
     done
 
