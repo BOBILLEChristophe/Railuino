@@ -152,8 +152,8 @@ public:
    * On ESP32 the default pins are CAN_RX_PIN and CAN_TX_PIN, defined
    * in Config.h. On AVR the pins are ignored (MCP2515 on the SPI bus,
    * see RAILUINO_MCP2515_* in TrackController.cpp).
-   * Returns false if the CAN controller could not be configured or if
-   * the Gleisbox did not answer the wake-up message.
+   * Returns false if the CAN controller could not be configured or the
+   * Gleisbox wake-up message could not be sent.
    */
   bool begin(const uint8_t can_rx_pin = CAN_RX_PIN,
              const uint8_t can_tx_pin = CAN_TX_PIN);
@@ -377,7 +377,7 @@ public:
 
   /**
    * Queries the software version of the track format processor
-   * (Gleisbox, device type 0x0010). Answers from other devices (MS2...)
+   * (Gleisbox, device type 0x0010 or 0x0011). Answers from other devices (MS2...)
    * are ignored. high and low may be nullptr.
    */
   bool getVersion(uint8_t *high, uint8_t *low);

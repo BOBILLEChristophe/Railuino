@@ -115,17 +115,24 @@ int main()
         uint8_t hi = 0xEE, lo = 0xEE;
         CHECK(ctrl.getVersion(&hi, &lo));
         CHECK(hi == 0x01 && lo == 0x27);
+
+        // Gleisbox seen on the layout: device type 0x0011, firmware 1.47.
+        reset();
+        ACAN_ESP32::can.onSend = [](const CANMessage &m) {
+            if (((m.id >> 17) & 0xFF) == 0x18)
+                ACAN_ESP32::can.rx.push_back(answer(0x18, {0x47, 0x46, 0xA4, 0x75, 0x01, 0x2F, 0x00, 0x11}, 0x3363));
+        };
+        CHECK(ctrl.getVersion(&hi, &lo));
+        CHECK(hi == 0x01 && lo == 0x2F);
     }
 
-    puts("#8 begin() sends the wake-up message once");
+    puts("#8 begin() sends the wake-up message once, without waiting");
     {
         reset();
         TrackController ctrl(0xDF24);
-        ACAN_ESP32::can.onSend = [](const CANMessage &m) {
-            if (((m.id >> 17) & 0xFF) == 0x1B)
-                ACAN_ESP32::can.rx.push_back(answer(0x1B, {0, 0, 0, 0, 0x11}));
-        };
+        // The real Gleisbox does not answer 0x1B: begin() must not wait.
         CHECK(ctrl.begin());
+        CHECK(g_millis < 600);                     // 500 ms CAN settle delay only
         int n = 0;
         for (auto &m : ACAN_ESP32::can.sent)
             if (((m.id >> 17) & 0xFF) == 0x1B) n++;

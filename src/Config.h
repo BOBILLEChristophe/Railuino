@@ -33,7 +33,7 @@
 // #define RAILUINO_VERSION 0x3AD  // 0.941 -> upgrade 0.93 to 0.94 for Arduino christophe bobille 03/2025
 // #define RAILUINO_VERSION 0x005F // 0.95 -> upgrade 0.941 to 0.95 for DesktopStation Uwe Monreal 05/2026
 #define RAILUINO_VERSION 0x03B7 // 0.951 -> upgrade 0.95 to 0.951 christophe bobille 05/2026
-#define TRACKBOX_VERSION 0x0127 // 1.39
+#define TRACKBOX_VERSION 0x0127 // 1.39 (tested on a layout with firmware 1.47 = 0x012F)
 
 // Pins for CAN bus on ESP32
 constexpr uint8_t CAN_RX_PIN = 22;

@@ -188,13 +188,13 @@ bool TrackController::begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin)
 
     delay(500);
 
-    bool ok = true;
-
     if (!mLoopback)
     {
-        // Wakes up the Gleisbox (60112/60113). Sent once: exchangeMessage()
-        // sends the message itself (it used to be sent a second time
-        // with sendMessage() just before).
+        // Wakes up the Gleisbox when no MS2/CS is present. Sent once and
+        // without waiting for an answer, as in Railuino 0.9: on a real
+        // layout (Gleisbox 0x0011, firmware 1.47, with an MS2) the
+        // Gleisbox does not answer this message, so waiting only delayed
+        // the start-up by mTimeout and made begin() report a failure.
         TrackMessage message;
         message.clear();
         message.prio = 0x00;
@@ -203,15 +203,17 @@ bool TrackController::begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin)
         message.length = 5;
         message.data[4] = 0x11;
 
-        ok = exchangeMessage(message, message, mTimeout);
-        if (mDebug)
-            Serial.println(ok ? F("Gleisbox OK (0x1B 0x11)") : F("!!! No answer from Gleisbox (0x1B 0x11)"));
+        if (!sendMessage(message))
+        {
+            Serial.println(F("!!! Cannot send the Gleisbox wake-up message (0x1B 0x11)"));
+            return false;
+        }
     }
 
     if (mHash == 0)
         generateHash();
 
-    return ok;
+    return true;
 }
 
 /* -------------------------------------------------------------------
@@ -950,8 +952,10 @@ bool TrackController::getVersion(uint8_t *high, uint8_t *low)
 {
     // Ping (0x18): every device on the bus answers with its software
     // version in data[4..5] and its device type in data[6..7]. The MS2
-    // often answers first, so we keep listening until the Gleisbox
-    // (device type 0x0010) has answered or the timeout expires.
+    // often answers first, so we keep listening until a Gleisbox has
+    // answered or the timeout expires. Device types: 0x0010 (Gleisbox
+    // 60112/60113 as documented in Railuino 0.9) and 0x0011 (observed on
+    // a Gleisbox with firmware 1.47).
     TrackMessage message;
     message.clear();
     message.command = 0x18;
@@ -962,7 +966,7 @@ bool TrackController::getVersion(uint8_t *high, uint8_t *low)
     const uint32_t start = millis();
     while (millis() - start < mTimeout)
     {
-        if (receiveMessage(message) && message.command == 0x18 && message.response && message.length == 8 && message.data[6] == 0x00 && message.data[7] == 0x10)
+        if (receiveMessage(message) && message.command == 0x18 && message.response && message.length == 8 && message.data[6] == 0x00 && (message.data[7] == 0x10 || message.data[7] == 0x11))
         {
             if (high != nullptr)
                 *high = message.data[4];
