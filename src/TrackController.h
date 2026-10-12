@@ -199,7 +199,15 @@ public:
    * but the more convenient methods below instead. 'out' and 'in'
    * may be the same object.
    */
-  bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout);
+  bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint32_t timeout);
+
+  /**
+   * Tells whether 'in' is the response to the request 'out': same
+   * command, response bit set and, for commands addressed to a
+   * device (locomotive, accessory, system sub-command...), same UID
+   * in data[0..3] and same sub-command in data[4].
+   */
+  static bool isResponseTo(const TrackMessage &out, const TrackMessage &in);
 
   /**
    * Controls power on the track. When passing false, all

@@ -348,45 +348,73 @@ bool TrackController::receiveMessage(TrackMessage &message)
    TrackController::exchangeMessage
 -------------------------------------------------------------------  */
 
-bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout)
+bool TrackController::isResponseTo(const TrackMessage &out, const TrackMessage &in)
 {
+    if (!in.response || in.command != out.command)
+        return false;
 
-    uint16_t command = out.command;
+    // Same filter as before: ignore responses carrying 4 bytes or less.
+    if (in.length <= 4)
+        return false;
+
+    switch (out.command)
+    {
+    case 0x00: // System command: UID in data[0..3], sub-command in data[4]
+        if (out.length >= 5 && in.data[4] != out.data[4])
+            return false;
+        // fall through
+    case 0x04: // Speed
+    case 0x05: // Direction
+    case 0x06: // Function
+    case 0x07: // Read Config
+    case 0x08: // Write Config
+    case 0x0B: // Accessory
+        // The response must concern the same locomotive / accessory.
+        // Without this check, the answer for another locomotive (sent
+        // by an MS2 on the same bus) could be taken as ours.
+        for (uint8_t i = 0; i < 4; i++)
+            if (in.data[i] != out.data[i])
+                return false;
+        return true;
+
+    default: // Ping (0x18), Discovery (0x01), Bootloader (0x1B)...
+        return true;
+    }
+}
+
+bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint32_t timeout)
+{
+    // Keep a copy of the request: 'out' and 'in' may be the same object.
+    const TrackMessage request = out;
 
     if (!sendMessage(out))
     {
+        // Previously: setPower(false) then for(;;) in debug mode, which
+        // froze the controller. The caller now decides what to do.
         if (mDebug)
-        {
             Serial.println(F("!!! Send error"));
-            Serial.println(F("!!! Emergency stop"));
-            setPower(false);
-            for (;;)
-                ;
-        }
+        return false;
     }
 
-    // uint32_t time = millis();
-    uint64_t time = millis();
+    // Unsigned subtraction: stays correct when millis() wraps around
+    // (every 49.7 days). "millis() < start + timeout" did not.
+    const uint32_t start = millis();
 
-    /* -- TrackMessage response -- */
-
-    while (millis() < time + timeout)
+    while (millis() - start < timeout)
     {
         in.clear();
+        const bool received = receiveMessage(in);
 
-        boolean result = receiveMessage(in);
-
-        if (result)
+        if (received && mDebug)
         {
-            Serial.println("=== TRAME CAN RECUE ===");
+            Serial.println(F("=== TRAME CAN RECUE ==="));
             in.printTo(Serial);
+            Serial.println();
         }
 
-        if (result && in.command == command && in.response && in.length > 4)
+        if (received && isResponseTo(request, in))
             return true;
-
-        if (result && in.command == command && in.response && in.length > 4)
-            return true;
+        yield();
     }
 
     if (mDebug)
