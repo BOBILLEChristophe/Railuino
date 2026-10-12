@@ -61,36 +61,47 @@ private:
    */
   bool mLoopback;
 
-  uint64_t mTimeout;
+  /**
+   * Timeout (in ms) used by exchangeMessage() for ordinary commands.
+   * uint32_t matches the type returned by millis().
+   */
+  uint32_t mTimeout;
 
 public:
+  /**
+   * Default timeout (in ms) for ordinary commands.
+   */
+  static constexpr uint32_t DEFAULT_TIMEOUT = 1000;
+
+  /**
+   * Timeout (in ms) for reading and writing decoder CVs, which can
+   * take several seconds on the programming track.
+   */
+  static constexpr uint32_t CV_TIMEOUT = 10000;
+
   /**
    * Creates a new TrackController with default values.
    */
   TrackController();
 
   /**
-   * Creates a new TrackController with modification of the default exchangeMessage timeout
+   * Creates a new TrackController with the given hash, debugging flag,
+   * exchangeMessage timeout (in ms) and loopback flag. A zero hash
+   * will result in a unique hash being generated.
+   *
+   * The first parameter is ALWAYS the hash, as in Railuino 0.9:
+   *   TrackController ctrl(0xDF24);              // hash
+   *   TrackController ctrl(0xDF24, true);        // hash, debug
+   *   TrackController ctrl(0xDF24, true, 500);   // hash, debug, timeout
+   *
+   * Versions 0.95/0.951 also had TrackController(timeOut) and
+   * TrackController(timeOut, debug). They were removed because
+   * TrackController(0xDF24) silently selected the timeout constructor.
+   * Use setTimeout() to change only the timeout.
    */
-  TrackController(uint64_t timeOut);
-
-  /**
-   * Creates a new TrackController with modification of the default exchangeMessage timeout and debugging
-   */
-  TrackController(uint64_t timeOut, bool debug);
-
-  /**
-   * Creates a new TrackController with the given hash and debugging
-   * flag and changing the default exchangeMessage timeout.
-   * A zero hash will result in a unique hash begin generated.
-   */
-  TrackController(uint16_t hash, bool debug, uint64_t timeOut);
-
-  /**
-   * Creates a new TrackController with the given hash and debugging
-   * flag. A zero hash will result in a unique hash begin generated.
-   */
-  TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback);
+  explicit TrackController(uint16_t hash, bool debug = false,
+                           uint32_t timeOut = DEFAULT_TIMEOUT,
+                           bool loopback = false);
   /**
    * Is called when a TrackController is being destroyed. Does the
    * necessary cleanup. No need to call this manually.
@@ -103,24 +114,35 @@ public:
    * effect. A zero hash will result in a unique hash begin
    * generated.
    */
-  void init(uint16_t hash, bool debug, bool loopback, uint64_t timeOut = 1000);
+  void init(uint16_t hash, bool debug, bool loopback, uint32_t timeOut = DEFAULT_TIMEOUT);
+
+  /**
+   * Changes the timeout (in ms) used by exchangeMessage() for
+   * ordinary commands.
+   */
+  void setTimeout(uint32_t timeOut);
+
+  /**
+   * Queries the timeout (in ms) used for ordinary commands.
+   */
+  uint32_t getTimeout() const;
 
   /**
    * Queries the hash used by the TrackController.
    */
-  uint16_t getHash();
+  uint16_t getHash() const;
 
   /**
    * Reflects whether the TrackController is in debug mode,
    * where all messages are dumped to the Serial console.
    */
-  bool isDebug();
+  bool isDebug() const;
 
   /**
-   * Reflects whether the TrackController is in debug mode,
+   * Reflects whether the TrackController is in loopback mode,
    * where all messages are reflected by the CAN controller.
    */
-  bool isLoopback();
+  bool isLoopback() const;
 
   /**
    * Initializes the CAN hardware and starts receiving CAN

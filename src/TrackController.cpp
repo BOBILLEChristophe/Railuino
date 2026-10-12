@@ -75,50 +75,26 @@ bool dequeue(CANMessage *p)
    TrackController (constructor / destructor)
 -------------------------------------------------------------------  */
 
+// Out-of-class definitions, required in C++11 if the constants are ODR-used.
+constexpr uint32_t TrackController::DEFAULT_TIMEOUT;
+constexpr uint32_t TrackController::CV_TIMEOUT;
+
 TrackController::TrackController()
     : mHash(0),
       mDebug(false),
       mLoopback(false),
-      mTimeout(1000)
+      mTimeout(DEFAULT_TIMEOUT)
 {
 }
 
-TrackController::TrackController(uint64_t timeOut)
-    : mHash(0),
-      mDebug(false),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-}
-
-TrackController::TrackController(uint64_t timeOut, bool debug)
-    : mHash(0),
-      mDebug(debug),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-    if (mDebug)
-        Serial.println("### Creating controller");
-}
-
-TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut)
-    : mHash(hash),
-      mDebug(debug),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-    if (mDebug)
-        Serial.println("### Creating controller with param");
-}
-
-TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback)
+// Note: no Serial output here. Global objects are constructed before
+// setup() runs, i.e. before Serial.begin() has been called.
+TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bool loopback)
     : mHash(hash),
       mDebug(debug),
       mLoopback(loopback),
       mTimeout(timeOut)
 {
-    if (mDebug)
-        Serial.println("### Creating controller with param");
 }
 
 TrackController::~TrackController() // Destructeur
@@ -133,7 +109,7 @@ TrackController::~TrackController() // Destructeur
 
 // Kept for compatibility with older versions but not used from v-0.9.x
 
-void TrackController::init(uint16_t hash, bool debug, bool loopback, uint64_t timeOut)
+void TrackController::init(uint16_t hash, bool debug, bool loopback, uint32_t timeOut)
 {
     mHash = hash;
     mDebug = debug;
@@ -142,10 +118,24 @@ void TrackController::init(uint16_t hash, bool debug, bool loopback, uint64_t ti
 }
 
 /* -------------------------------------------------------------------
+   TrackController::setTimeout / getTimeout
+-------------------------------------------------------------------  */
+
+void TrackController::setTimeout(uint32_t timeOut)
+{
+    mTimeout = timeOut;
+}
+
+uint32_t TrackController::getTimeout() const
+{
+    return mTimeout;
+}
+
+/* -------------------------------------------------------------------
    TrackController::getHash
 -------------------------------------------------------------------  */
 
-uint16_t TrackController::getHash()
+uint16_t TrackController::getHash() const
 {
     return mHash;
 }
@@ -154,7 +144,7 @@ uint16_t TrackController::getHash()
    TrackController::isDebug
 -------------------------------------------------------------------  */
 
-bool TrackController::isDebug()
+bool TrackController::isDebug() const
 {
     return mDebug;
 }
@@ -163,7 +153,7 @@ bool TrackController::isDebug()
    TrackController::isLoopback
 -------------------------------------------------------------------  */
 
-bool TrackController::isLoopback()
+bool TrackController::isLoopback() const
 {
     return mLoopback;
 }
