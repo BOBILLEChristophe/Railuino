@@ -76,6 +76,59 @@
  }
  
  /* -------------------------------------------------------------------
+    TrackMessage::make / makeSystem
+ -------------------------------------------------------------------  */
+
+ TrackMessage TrackMessage::make(uint8_t command, uint32_t uid, uint8_t length)
+ {
+     TrackMessage m;
+     m.clear();
+     m.command = command;
+     m.length = length > 8 ? 8 : length;
+     m.setUid(uid);
+     return m;
+ }
+
+ TrackMessage TrackMessage::makeSystem(uint8_t subCommand, uint32_t uid, uint8_t length)
+ {
+     TrackMessage m = make(Marklin::Cmd::System, uid, length < 5 ? 5 : length);
+     m.data[4] = subCommand;
+     return m;
+ }
+
+ /* -------------------------------------------------------------------
+    TrackMessage::uid / setUid / canId / setCanId
+ -------------------------------------------------------------------  */
+
+ uint32_t TrackMessage::uid() const
+ {
+     return (static_cast<uint32_t>(data[0]) << 24) | (static_cast<uint32_t>(data[1]) << 16) |
+            (static_cast<uint32_t>(data[2]) << 8) | data[3];
+ }
+
+ void TrackMessage::setUid(uint32_t uid)
+ {
+     data[0] = (uid >> 24) & 0xFF;
+     data[1] = (uid >> 16) & 0xFF;
+     data[2] = (uid >> 8) & 0xFF;
+     data[3] = uid & 0xFF;
+ }
+
+ uint32_t TrackMessage::canId() const
+ {
+     return (static_cast<uint32_t>(prio & 0x0F) << 25) | (static_cast<uint32_t>(command) << 17) |
+            (static_cast<uint32_t>(response ? 1 : 0) << 16) | hash;
+ }
+
+ void TrackMessage::setCanId(uint32_t id)
+ {
+     prio = (id >> 25) & 0x0F;
+     command = (id >> 17) & 0xFF;
+     response = (id >> 16) & 0x01;
+     hash = id & 0xFFFF;
+ }
+
+ /* -------------------------------------------------------------------
     TrackMessage::printTo
  -------------------------------------------------------------------  */
  
