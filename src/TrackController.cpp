@@ -19,38 +19,25 @@
 
 #include "TrackController.h"
 
+#include "Esp32TwaiDriver.h"
+#include "Mcp2515Driver.h"
+
+/* -------------------------------------------------------------------
+   Default CAN driver, used when no driver is given to the constructor:
+   the built-in TWAI controller on ESP32, an MCP2515 on AVR
+   (pins and quartz: RAILUINO_MCP2515_* in Mcp2515Driver.h).
+-------------------------------------------------------------------  */
+
 #if defined(ARDUINO_ARCH_ESP32)
-#include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
-
+static Esp32TwaiDriver sDefaultDriver;
+static CanDriver *defaultDriver() { return &sDefaultDriver; }
 #elif defined(ARDUINO_ARCH_AVR)
-#include <ACAN2515.h> // https://github.com/pierremolinaro/acan2515.git
-
-// MCP2515 wiring and quartz. The defaults match the usual Uno/Mega
-// shields; override them without touching the library, for instance in
-// platformio.ini:
-//   build_flags = -D RAILUINO_MCP2515_QUARTZ=8000000UL -D RAILUINO_MCP2515_CS=53
-// Many cheap MCP2515 modules carry an 8 MHz quartz: with the wrong value
-// the bit rate is wrong and nothing is received.
-#ifndef RAILUINO_MCP2515_QUARTZ
-#define RAILUINO_MCP2515_QUARTZ 16000000UL // 16 MHz
-#endif
-#ifndef RAILUINO_MCP2515_CS
-#define RAILUINO_MCP2515_CS 10 // CS input of MCP2515
-#endif
-#ifndef RAILUINO_MCP2515_INT
-#define RAILUINO_MCP2515_INT 2 // INT output of MCP2515
-#endif
-
-static const uint32_t QUARTZ_FREQUENCY = RAILUINO_MCP2515_QUARTZ;
-static const uint8_t MCP2515_CS = RAILUINO_MCP2515_CS;
-static const uint8_t MCP2515_INT = RAILUINO_MCP2515_INT;
-static ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
-
+static Mcp2515Driver sDefaultDriver;
+static CanDriver *defaultDriver() { return &sDefaultDriver; }
 #else
-#error "Railuino supports ESP32 (TWAI) and AVR boards with an MCP2515 (Uno, Mega...)"
+// Other platforms (e.g. native unit tests): a driver must be given.
+static CanDriver *defaultDriver() { return nullptr; }
 #endif
-
-static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate = 250Kbit/s
 
 /* -------------------------------------------------------------------
    TrackController (constructor / destructor)
@@ -61,7 +48,8 @@ constexpr uint32_t TrackController::DEFAULT_TIMEOUT;
 constexpr uint32_t TrackController::CV_TIMEOUT;
 
 TrackController::TrackController()
-    : mHash(0),
+    : mCan(defaultDriver()),
+      mHash(0),
       mDebug(false),
       mLoopback(false),
       mTimeout(DEFAULT_TIMEOUT)
@@ -71,7 +59,17 @@ TrackController::TrackController()
 // Note: no Serial output here. Global objects are constructed before
 // setup() runs, i.e. before Serial.begin() has been called.
 TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bool loopback)
-    : mHash(hash),
+    : mCan(defaultDriver()),
+      mHash(hash),
+      mDebug(debug),
+      mLoopback(loopback),
+      mTimeout(timeOut)
+{
+}
+
+TrackController::TrackController(CanDriver &can, uint16_t hash, bool debug, uint32_t timeOut, bool loopback)
+    : mCan(&can),
+      mHash(hash),
       mDebug(debug),
       mLoopback(loopback),
       mTimeout(timeOut)
@@ -145,46 +143,32 @@ bool TrackController::isLoopback() const
 
 bool TrackController::begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin)
 {
-    //--- Configure CAN
+    if (mCan == nullptr)
+        return false;
+    // Only meaningful for the ESP32 TWAI driver; ignored by the others.
+    mCan->setPins(can_rx_pin, can_tx_pin);
+    return begin();
+}
 
-#if defined(ARDUINO_ARCH_ESP32)
-    ACAN_ESP32_Settings settings(DESIRED_BIT_RATE); // Marklin CAN baudrate = 250Kbit/s
-    settings.mRxPin = static_cast<gpio_num_t>(can_rx_pin);
-    settings.mTxPin = static_cast<gpio_num_t>(can_tx_pin);
-    const uint32_t errorCode = ACAN_ESP32::can.begin(settings);
-#elif defined(ARDUINO_ARCH_AVR)
-    (void)can_rx_pin; // pins are fixed by the SPI bus and RAILUINO_MCP2515_*
-    (void)can_tx_pin;
-    SPI.begin();
-    ACAN2515Settings settings(QUARTZ_FREQUENCY, DESIRED_BIT_RATE);
-    const uint16_t errorCode = can.begin(settings, []
-                                         { can.isr(); });
-#endif
-
-    if (errorCode)
+bool TrackController::begin()
+{
+    if (mCan == nullptr)
     {
-        // Always reported: without CAN nothing else can work.
-        Serial.print(F("!!! CAN configuration error 0x"));
-        Serial.println(errorCode, HEX);
+        Serial.println(F("!!! No CAN driver"));
+        return false;
+    }
+
+    // Errors are always reported (without CAN nothing else can work);
+    // configuration details only in debug mode.
+    if (!mCan->begin(mDebug ? static_cast<Print *>(&Serial) : nullptr))
+    {
+        if (!mDebug)
+            Serial.println(F("!!! CAN configuration error"));
         return false;
     }
 
     if (mDebug)
-    {
-        Serial.print(F("Bit Rate prescaler: "));
-        Serial.println(settings.mBitRatePrescaler);
-        Serial.print(F("Triple Sampling: "));
-        Serial.println(settings.mTripleSampling ? F("yes") : F("no"));
-        Serial.print(F("Actual bit rate: "));
-        Serial.print(settings.actualBitRate());
-        Serial.println(F(" bit/s"));
-        Serial.print(F("Exact bit rate ? "));
-        Serial.println(settings.exactBitRate() ? F("yes") : F("no"));
-        Serial.print(F("Sample point: "));
-        Serial.print(settings.samplePointFromBitStart());
-        Serial.println(F("%"));
         Serial.println(F("Configuration CAN OK"));
-    }
 
     delay(500);
 
@@ -234,7 +218,10 @@ void TrackController::end()
 
 bool TrackController::sendMessage(TrackMessage &message)
 {
-    CANMessage frame;
+    if (mCan == nullptr)
+        return false;
+
+    CanFrame frame;
 
     if (message.length > 8)
         return false;
@@ -269,11 +256,7 @@ bool TrackController::sendMessage(TrackMessage &message)
         Serial.print("\n------------------------------------------------------------------\n");
     }
 
-#if defined(ARDUINO_ARCH_ESP32)
-    return ACAN_ESP32::can.tryToSend(frame);
-#elif defined(ARDUINO_ARCH_AVR)
-    return can.tryToSend(frame);
-#endif
+    return mCan->send(frame);
 }
 
 /* -------------------------------------------------------------------
@@ -282,14 +265,15 @@ bool TrackController::sendMessage(TrackMessage &message)
 
 bool TrackController::receiveMessage(TrackMessage &message)
 {
+    if (mCan == nullptr)
+        return false;
 
-    CANMessage frame;
+    CanFrame frame;
+    bool result = mCan->receive(frame);
 
-#if defined(ARDUINO_ARCH_ESP32)
-    bool result = ACAN_ESP32::can.receive(frame);
-#elif defined(ARDUINO_ARCH_AVR)
-    bool result = can.receive(frame);
-#endif
+    // Märklin only uses extended identifiers: ignore standard frames.
+    while (result && !frame.ext)
+        result = mCan->receive(frame);
 
     if (result)
     {
@@ -325,11 +309,6 @@ bool TrackController::receiveMessage(TrackMessage &message)
             }
             Serial.print("\n------------------------------------------------------------------\n");
         }
-
-        // if (mDebug) {
-        //   Serial.print("<== 0x");
-        //   Serial.println(frame.id, HEX);
-        // }
     }
     return result;
 }
