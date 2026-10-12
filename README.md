@@ -112,6 +112,7 @@ Dans `examples/01.Controller` :
 | TestAddressLoco | Cherche les adresses MFX occupées | toutes |
 | SerialCommand | Commandes texte depuis le moniteur série (`help`) | toutes |
 | Monitor | Affiche et décode les commandes de la MS2 (adresse d'une loco…) | toutes |
+| DesktopStation | Passerelle pour le logiciel Desktop Station (d'après Uwe Monreal) | toutes |
 | TcpCommand | Mêmes commandes en TCP (port 15731) | ESP32 |
 | WebControl | Interface web (pages dans `data/`) | ESP32 |
 

@@ -1,59 +1,53 @@
-# Desktop Station serial gateway (ESP32)
+# Desktop Station serial gateway
 
-Migration of the `Serial_RS5_ESP32_LED` example from [Uwe Monreal's pull request #1](https://github.com/BOBILLEChristophe/Railuino/pull/1), itself based on Yaasan's 2013 gateway.
+Lets the [Desktop Station](https://desktopstation.net/wiki/doku.php/desktop_station_software#download) software drive a Märklin layout (Gleisbox) through an ESP32, an Uno or a Mega, connected over USB at 115200 baud.
 
-This is **an adaptation for Railuino 0.10.0**, not the unchanged original. The old duplicated `TrackController` / `TrackMessage` files are intentionally excluded: the sketch includes the current `<Railuino.h>`.
-
-## Hardware and software
-
-- ESP32 with a CAN transceiver connected to a Märklin 250 kbit/s CAN bus.
-- Default CAN pins in the sketch: RX GPIO 22, TX GPIO 23. Change for your hardware.
-- Desktop Station via USB Serial at 115200 baud. **Not yet tested end-to-end.**
-- Optional M5Atom LED display is not included; the example should work on a generic ESP32.
+Based on `Serial_RS5_ESP32_LED` by Uwe Monreal ([pull request #1](https://github.com/BOBILLEChristophe/Railuino/pull/1)), itself based on Yaasan's 2013 gateway. The sketch uses the current library (`#include <Railuino.h>`) instead of the copies of `TrackController` / `TrackMessage` of the pull request.
 
 ## Build
 
-From the Railuino repository root (after copying this folder and `platformio.desktop-station.ini`):
+In `platformio.ini`, set:
 
-```bash
-pio run -c platformio.desktop-station.ini -e esp32dev
-pio run -c platformio.desktop-station.ini -e esp32dev -t upload
-pio device monitor -b 115200
+```ini
+src_dir = examples/01.Controller/DesktopStation
 ```
 
-## Supported serial commands
+then `pio run -e esp32dev -t upload` (or `-e uno`, `-e megaatmega2560`). With the Arduino IDE: *File → Examples → Railuino → 01.Controller → DesktopStation*.
 
-```
-setPower(1)
-setPower(0)
-setLocoSpeed(16391,100)
-setLocoDirection(16391,1)
-toggleLocoDirection(16391)
-setLocoFunction(16391,0,1)
-toggleLocoFunction(16391,0)
-setTurnout(12289,1)
-getVersion()
-getLocoConfig(16391,1)
-setLocoConfig(16391,1,3)
-setPing()
-mfxDiscovery()
-mfxBind(4660,22136,7)
-mfxVerify(4660,22136,7)
-```
+Default CAN pins on ESP32: Rx 22, Tx 23 (Uwe Monreal's board used 19 / 22). On Uno / Mega the MCP2515 settings come from `RAILUINO_MCP2515_*`.
 
-Address values include Märklin protocol base (`0x4000|SID` for MFX). The two UID words of `mfxBind` / `mfxVerify` follow Uwe's original ordering; confirm on the wire before using on locomotives.
+Close the serial monitor before starting Desktop Station: only one program can use the port.
 
-Responses: `100 Ready`, `200 Ok`, `300 Command error`, `301 Syntax error`, `302 receive timeout` (also used when an exchange fails), and `303 CAN initialization error`. Events: `@PING`, `@PWR`, `@DIR`, `@SPD`, `@FNC`, `@ACC`, `@MFX`, `@MFXBIND`.
+## Commands and answers
 
-## Not yet restored
+Same syntax and answers as Uwe Monreal's gateway, which was used with Desktop Station:
 
-- `getS88()` / `TrackReporterS88_DS` (Uwe's Desktop Station-specific adaptation): pinout and electrical interface require validation. The current core's `TrackReporterS88` is not a drop-in replacement until checked.
-- M5Atom LED indication (`M5Atom.h` dependency), intentionally optional.
-- `reset()` command: requires a proper CAN lifecycle implementation to avoid reinitializing an already-active controller.
+| Command | Answer |
+| --- | --- |
+| `setPower(1)` / `setPower(0)` | `200 Ok` |
+| `setLocoSpeed(16391,100)` | `200 Ok` |
+| `setLocoDirection(16391,1)`, `toggleLocoDirection(16391)` | `200 Ok` |
+| `setLocoFunction(16391,0,1)`, `toggleLocoFunction(16391,0)` | `200 Ok` |
+| `setTurnout(12289,1)` | `200 Ok` |
+| `getVersion()` | `@VER,12F,` then `200 Ok` |
+| `getLocoConfig(16391,1)` | `@CV,16391,1,value,` then `200 Ok` |
+| `setLocoConfig(16391,1,3)` | `200 Ok` |
+| `setPing()` | `200 Ok`, then `@PING,...` events |
+| `getS88(1)` | `@S88,xxxx,` then `200 Ok` (only with `S88_ENABLED 1`) |
+| `reset()` | `100 Ready` then `200 Ok` |
+| `mfxDiscovery()`, `mfxBind(UID_HI,UID_LO,SID)`, `mfxVerify(...)` | `200 Ok` |
 
-## Safety and validation
+- Failure or unknown command: `300 Command error`; wrong syntax: `301 Syntax error`; line not finished after 4 s: `302 receive timeout`; CAN not started: `303 Unknown error`.
+- Events from the bus: `@PING`, `@PWR`, `@DIR`, `@SPD`, `@FNC`, `@ACC`, `@MFX`, `@MFXBIND`, in hexadecimal without leading zeros, as the original.
+- `mfxBind(65513,45460,7)` sends `FF E9 B1 94 00 07`: the UID words in the order they are written (`FFE9`, `B194`), as the original.
 
-- Never test traction/accessory commands on an unattended layout.
-- Validate Desktop Station's expected syntax and formatting with a serial capture; compatibility has not been certified.
-- `mfxDiscovery`, `mfxBind` and `mfxVerify` operate on MFX registration. Test on a dedicated section and verify UID/SID ordering.
-- This example is not a complete implementation of the original PR. Keep it in a feature branch until tested.
+## Differences from the pull request
+
+- `reset()` empties the receive queue and answers `100 Ready`, without restarting the CAN controller.
+- `getS88()` uses the library's `TrackReporterS88`. It is disabled by default (`S88_ENABLED 0`): the S88 pins of Uwe Monreal's board (DATA 33, CLOCK 25, LOAD 23, RESET 21) include GPIO 23, used here for CAN Tx. Choose free pins before enabling it.
+- The M5Atom LED (red / blue power indicator) is not included.
+- Bus events are also reported when they arrive while a command waits for its answer.
+
+## Not tested yet
+
+The gateway compiles for ESP32, Uno and Mega and has been checked with a simulated bus, but not yet with Desktop Station on a real layout. Do not use an `MfxRegistry` with it: Desktop Station registers the MFX locomotives itself.
