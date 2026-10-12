@@ -30,8 +30,8 @@ TrackController ctrl(0xDF24, DEBUG);      // Instance with hash, debug and defau
 
 // const char *ssid = "**********";
 // const char *password = "**********";
-const char *ssid = "Livebox-BC90";
-const char *password = "V9b7qzKFxdQfbMT4Pa";
+const char *ssid = "**********";     // your WiFi network
+const char *password = "**********"; // your WiFi password
 
 
 IPAddress ip(192, 168, 1, 103);

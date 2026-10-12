@@ -7,12 +7,12 @@
  * Copyright (C) 2024 christophe bobille
  * Copyright (C) 2026 Uwe Monreal
  *
- * This example is free software; you can redistribute it and/or
- * modify it under the terms of the Creative Commons Zero License,
- * version 1.0, as published by the Creative Commons Organisation.
- * This effectively puts the file into the public domain.
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
- * This example is distributed in the hope that it will be useful,
+ * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
@@ -61,36 +61,47 @@ private:
    */
   bool mLoopback;
 
-  uint64_t mTimeout;
+  /**
+   * Timeout (in ms) used by exchangeMessage() for ordinary commands.
+   * uint32_t matches the type returned by millis().
+   */
+  uint32_t mTimeout;
 
 public:
+  /**
+   * Default timeout (in ms) for ordinary commands.
+   */
+  static constexpr uint32_t DEFAULT_TIMEOUT = 1000;
+
+  /**
+   * Timeout (in ms) for reading and writing decoder CVs, which can
+   * take several seconds on the programming track.
+   */
+  static constexpr uint32_t CV_TIMEOUT = 10000;
+
   /**
    * Creates a new TrackController with default values.
    */
   TrackController();
 
   /**
-   * Creates a new TrackController with modification of the default exchangeMessage timeout
+   * Creates a new TrackController with the given hash, debugging flag,
+   * exchangeMessage timeout (in ms) and loopback flag. A zero hash
+   * will result in a unique hash being generated.
+   *
+   * The first parameter is ALWAYS the hash, as in Railuino 0.9:
+   *   TrackController ctrl(0xDF24);              // hash
+   *   TrackController ctrl(0xDF24, true);        // hash, debug
+   *   TrackController ctrl(0xDF24, true, 500);   // hash, debug, timeout
+   *
+   * Versions 0.95/0.951 also had TrackController(timeOut) and
+   * TrackController(timeOut, debug). They were removed because
+   * TrackController(0xDF24) silently selected the timeout constructor.
+   * Use setTimeout() to change only the timeout.
    */
-  TrackController(uint64_t timeOut);
-
-  /**
-   * Creates a new TrackController with modification of the default exchangeMessage timeout and debugging
-   */
-  TrackController(uint64_t timeOut, bool debug);
-
-  /**
-   * Creates a new TrackController with the given hash and debugging
-   * flag and changing the default exchangeMessage timeout.
-   * A zero hash will result in a unique hash begin generated.
-   */
-  TrackController(uint16_t hash, bool debug, uint64_t timeOut);
-
-  /**
-   * Creates a new TrackController with the given hash and debugging
-   * flag. A zero hash will result in a unique hash begin generated.
-   */
-  TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback);
+  explicit TrackController(uint16_t hash, bool debug = false,
+                           uint32_t timeOut = DEFAULT_TIMEOUT,
+                           bool loopback = false);
   /**
    * Is called when a TrackController is being destroyed. Does the
    * necessary cleanup. No need to call this manually.
@@ -103,38 +114,49 @@ public:
    * effect. A zero hash will result in a unique hash begin
    * generated.
    */
-  void init(uint16_t hash, bool debug, bool loopback, uint64_t timeOut = 1000);
+  void init(uint16_t hash, bool debug, bool loopback, uint32_t timeOut = DEFAULT_TIMEOUT);
+
+  /**
+   * Changes the timeout (in ms) used by exchangeMessage() for
+   * ordinary commands.
+   */
+  void setTimeout(uint32_t timeOut);
+
+  /**
+   * Queries the timeout (in ms) used for ordinary commands.
+   */
+  uint32_t getTimeout() const;
 
   /**
    * Queries the hash used by the TrackController.
    */
-  uint16_t getHash();
+  uint16_t getHash() const;
 
   /**
    * Reflects whether the TrackController is in debug mode,
    * where all messages are dumped to the Serial console.
    */
-  bool isDebug();
+  bool isDebug() const;
 
   /**
-   * Reflects whether the TrackController is in debug mode,
+   * Reflects whether the TrackController is in loopback mode,
    * where all messages are reflected by the CAN controller.
    */
-  bool isLoopback();
+  bool isLoopback() const;
 
   /**
    * Initializes the CAN hardware and starts receiving CAN
    * messages. CAN messages are put into an internal buffer of
    * limited size, so they don't get lost, but you have to take
    * care of them in time. Otherwise the buffer might overflow.
-   * default CAN Rx pin is GPIO_NUM_5 and can_tx_pin is GPIO_NUM_4
+   * On ESP32 the default pins are CAN_RX_PIN and CAN_TX_PIN, defined
+   * in Config.h. On AVR the pins are ignored (MCP2515 on the SPI bus,
+   * see RAILUINO_MCP2515_* in TrackController.cpp).
+   * Returns false if the CAN controller could not be configured or the
+   * Gleisbox wake-up message could not be sent.
    */
-
-  // void begin(const gpio_num_t can_rx_pin = GPIO_NUM_5,
-  //            const gpio_num_t can_tx_pin = GPIO_NUM_4);
-
-  void begin(const byte can_rx_pin = 5,
-             const byte can_tx_pin = 4);
+  bool begin(const uint8_t can_rx_pin = CAN_RX_PIN,
+             const uint8_t can_tx_pin = CAN_TX_PIN);
 
   /**
    * Generates a new hash and makes sure it does not conflict
@@ -177,7 +199,15 @@ public:
    * but the more convenient methods below instead. 'out' and 'in'
    * may be the same object.
    */
-  bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout);
+  bool exchangeMessage(TrackMessage &out, TrackMessage &in, uint32_t timeout);
+
+  /**
+   * Tells whether 'in' is the response to the request 'out': same
+   * command, response bit set and, for commands addressed to a
+   * device (locomotive, accessory, system sub-command...), same UID
+   * in data[0..3] and same sub-command in data[4].
+   */
+  static bool isResponseTo(const TrackMessage &out, const TrackMessage &in);
 
   /**
    * Controls power on the track. When passing false, all
@@ -287,14 +317,14 @@ public:
 
   /**
    * Queries the direction of the given locomotive and writes it
-   * into the referenced byte. The return value indicates whether
+   * into the referenced uint8_t. The return value indicates whether
    * the call was successful and the direction is valid.
    */
   bool getLocoDirection(const uint16_t address, uint8_t *direction);
 
   /**
    * Queries the speed of the given locomotive and writes it
-   * into the referenced byte. The return value indicates whether
+   * into the referenced uint8_t. The return value indicates whether
    * the call was successful and the speed is valid.
    */
 
@@ -302,7 +332,7 @@ public:
 
   /**
    * Queries the given function of the given locomotive and writes
-   * it into the referenced byte. The return value indicates
+   * it into the referenced uint8_t. The return value indicates
    * whether the call was successful and the power is valid. Note
    * that the call will not reflect the original power value sent
    * to the function, but only 0 ("off") or 1 ("on").
@@ -339,14 +369,17 @@ public:
   //!\\ Les décodeurs MFX de première génération ne sont pas conçus pour cela et pourraient être endommagés
   //!\\ First-generation MFX decoders are not designed for this purpose and could be damaged.
 
-  // See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 2.8 Befehl: Fast Read für mfx SID - Adresse
+  // Command 0x07 "Read Config" of the CS2 CAN protocol
+  // (https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf).
+  // Uses CV_TIMEOUT (10 s).
 
-  bool readConfig(const uint16_t address, uint16_t number, byte *value);
+  bool readConfig(const uint16_t address, uint16_t number, uint8_t *value);
 
   /**
-   * Queries the software version of the track format processor.
+   * Queries the software version of the track format processor
+   * (Gleisbox, device type 0x0010 or 0x0011). Answers from other devices (MS2...)
+   * are ignored. high and low may be nullptr.
    */
-  // bool getVersion();
   bool getVersion(uint8_t *high, uint8_t *low);
 
   /**

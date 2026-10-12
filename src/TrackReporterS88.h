@@ -1,3 +1,20 @@
+/*********************************************************************
+ * Railuino - Hacking your Märklin
+ *
+ * Copyright (C) 2012 Joerg Pleumann
+ * Copyright (C) 2024 christophe bobille
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * LICENSE file for more details.
+ */
+
 #ifndef TRACK_REPORTER_H
 #define TRACK_REPORTER_H
 
@@ -22,23 +39,40 @@
 class TrackReporterS88
 {
 
+public:
+  /**
+   * Maximum number of 16 bit modules (512 contacts).
+   */
+  static constexpr uint8_t MAX_MODULES = 32;
+
+  /**
+   * Default pins, as in Railuino 0.9.
+   * On ESP32, GPIO 4 (RESET) is also the default CAN Tx pin of
+   * TrackController::begin(): pass other pins to the constructor.
+   */
+  static constexpr uint8_t DEFAULT_DATA_PIN = A0;
+  static constexpr uint8_t DEFAULT_CLOCK_PIN = 2;
+  static constexpr uint8_t DEFAULT_LOAD_PIN = 3;
+  static constexpr uint8_t DEFAULT_RESET_PIN = 4;
+
 private:
   /**
-   * The number of contacts available.
+   * The number of 16 bit modules (1 to MAX_MODULES).
    */
-  int mSize;
-  /**
-   * Stores the debug flag. When debugging is on, all outgoing and
-   * incoming messages are printed to the Serial console.
-   */
-  bool mS88Debug;
+  uint8_t mSize;
 
-  bool mS88IntEna;
+  /**
+   * S88 bus pins.
+   */
+  uint8_t mDataPin;
+  uint8_t mClockPin;
+  uint8_t mLoadPin;
+  uint8_t mResetPin;
 
   /**
    * The most recent contact values we know.
    */
-  byte mSwitches[64];
+  uint8_t mSwitches[MAX_MODULES * 2];
 
 public:
   /**
@@ -47,9 +81,13 @@ public:
    * maximum of 32, it makes sense to specify the actual number,
    * since this speeds up reporting. The method assumes 16 bit
    * modules. If you use 8 bit modules instead (or both) you need
-   * to do the math yourself.
+   * to do the math yourself. Values above 32 are limited to 32.
    */
-  TrackReporterS88(int modules);
+  explicit TrackReporterS88(uint8_t modules,
+                            uint8_t dataPin = DEFAULT_DATA_PIN,
+                            uint8_t clockPin = DEFAULT_CLOCK_PIN,
+                            uint8_t loadPin = DEFAULT_LOAD_PIN,
+                            uint8_t resetPin = DEFAULT_RESET_PIN);
 
   /**
    * Reads the current state of all contacts into the TrackReporter
@@ -57,23 +95,23 @@ public:
    * periodically to have up-to-date values.
    */
   void refresh();
-  void refresh(int inMaxSize);
+
+  /**
+   * Same as refresh(), but reads only the first 'modules' modules.
+   */
+  void refresh(uint8_t modules);
 
   /**
    * Returns the state of an individual contact. Valid index values
-   * are 1 to 512.
+   * are 1 to 512. Returns false for an index out of range.
    */
-  bool getValue(int index);
+  bool getValue(uint16_t index) const;
 
   /**
-   * Returns the state of contacts. Valid index values
-   * are 0 to 63.
+   * Returns the state of 8 contacts. Valid index values
+   * are 0 to 63. Returns 0 for an index out of range.
    */
-  byte getByte(int index);
-
-  // void RepIntEna();
-
-  // void RepIntDis();
+  uint8_t getByte(uint8_t index) const;
 };
 
-#endif // TRACKREPORTER_H
+#endif // TRACK_REPORTER_H

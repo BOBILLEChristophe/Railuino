@@ -6,12 +6,12 @@
  * Copyright (C) 2024 christophe bobille
  * Copyright (C) 2026 Uwe Monreal
  *
- * This example is free software; you can redistribute it and/or
- * modify it under the terms of the Creative Commons Zero License,
- * version 1.0, as published by the Creative Commons Organisation.
- * This effectively puts the file into the public domain.
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
  *
- * This example is distributed in the hope that it will be useful,
+ * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
@@ -19,104 +19,63 @@
 
 #include "TrackController.h"
 
-#if defined ARDUINO_ARCH_ESP32
+#if defined(ARDUINO_ARCH_ESP32)
 #include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
-#include <Arduino.h>
-#elif defined ARDUINO_ARCH_AVR
+
+#elif defined(ARDUINO_ARCH_AVR)
 #include <ACAN2515.h> // https://github.com/pierremolinaro/acan2515.git
-static const uint32_t QUARTZ_FREQUENCY = 16UL * 1000UL * 1000UL; // 16 MHz
-static const byte MCP2515_INT = 2;                               // INT output of MCP2515 (adapt to your design)
-static const byte MCP2515_CS = 10;                               // CS input of MCP2515 (adapt to your design)
-ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
+
+// MCP2515 wiring and quartz. The defaults match the usual Uno/Mega
+// shields; override them without touching the library, for instance in
+// platformio.ini:
+//   build_flags = -D RAILUINO_MCP2515_QUARTZ=8000000UL -D RAILUINO_MCP2515_CS=53
+// Many cheap MCP2515 modules carry an 8 MHz quartz: with the wrong value
+// the bit rate is wrong and nothing is received.
+#ifndef RAILUINO_MCP2515_QUARTZ
+#define RAILUINO_MCP2515_QUARTZ 16000000UL // 16 MHz
+#endif
+#ifndef RAILUINO_MCP2515_CS
+#define RAILUINO_MCP2515_CS 10 // CS input of MCP2515
+#endif
+#ifndef RAILUINO_MCP2515_INT
+#define RAILUINO_MCP2515_INT 2 // INT output of MCP2515
+#endif
+
+static const uint32_t QUARTZ_FREQUENCY = RAILUINO_MCP2515_QUARTZ;
+static const uint8_t MCP2515_CS = RAILUINO_MCP2515_CS;
+static const uint8_t MCP2515_INT = RAILUINO_MCP2515_INT;
+static ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
+
+#else
+#error "Railuino supports ESP32 (TWAI) and AVR boards with an MCP2515 (Uno, Mega...)"
 #endif
 
 static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate = 250Kbit/s
-
-#define SIZE 32
-
-CANMessage _buffer[SIZE];
-
-volatile uint16_t posRead = 0;
-
-volatile uint16_t posWrite = 0;
-
-volatile bool lastOpWasWrite = false;
-
-bool dequeue(CANMessage *p) {
-	noInterrupts();
-
-	if (posWrite == posRead && !lastOpWasWrite) {
-		interrupts();
-		return false;
-	}
-
-	memcpy(p, &_buffer[posRead], sizeof(CANMessage));
-/*
-	p->id=_buffer[posRead].id;
-	p->length=_buffer[posRead].length;
-
-	for (int i = 0; i < p->length; i++) {
-		p->data[i] = _buffer[posRead].data[i];
-	}
-*/
-	//*p = _buffer[posRead];
-
-	posRead = (posRead + 1) % SIZE;
-	lastOpWasWrite = false;
-
-	interrupts();
-
-	return true;
-}
 
 /* -------------------------------------------------------------------
    TrackController (constructor / destructor)
 -------------------------------------------------------------------  */
 
+// Out-of-class definitions, required in C++11 if the constants are ODR-used.
+constexpr uint32_t TrackController::DEFAULT_TIMEOUT;
+constexpr uint32_t TrackController::CV_TIMEOUT;
+
 TrackController::TrackController()
     : mHash(0),
       mDebug(false),
       mLoopback(false),
-      mTimeout(1000)
+      mTimeout(DEFAULT_TIMEOUT)
 {
 }
 
-TrackController::TrackController(uint64_t timeOut)
-    : mHash(0),
-      mDebug(false),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-}
-
-TrackController::TrackController(uint64_t timeOut, bool debug)
-    : mHash(0),
-      mDebug(debug),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-    if (mDebug)
-        Serial.println("### Creating controller");
-}
-
-TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut)
-    : mHash(hash),
-      mDebug(debug),
-      mLoopback(false),
-      mTimeout(timeOut)
-{
-    if (mDebug)
-        Serial.println("### Creating controller with param");
-}
-
-TrackController::TrackController(uint16_t hash, bool debug, uint64_t timeOut, bool loopback)
+// Note: no Serial output here. Global objects are constructed before
+// setup() runs, i.e. before Serial.begin() has been called.
+TrackController::TrackController(uint16_t hash, bool debug, uint32_t timeOut, bool loopback)
     : mHash(hash),
       mDebug(debug),
       mLoopback(loopback),
       mTimeout(timeOut)
 {
-    if (mDebug)
-        Serial.println("### Creating controller with param");
 }
 
 TrackController::~TrackController() // Destructeur
@@ -131,7 +90,7 @@ TrackController::~TrackController() // Destructeur
 
 // Kept for compatibility with older versions but not used from v-0.9.x
 
-void TrackController::init(uint16_t hash, bool debug, bool loopback, uint64_t timeOut)
+void TrackController::init(uint16_t hash, bool debug, bool loopback, uint32_t timeOut)
 {
     mHash = hash;
     mDebug = debug;
@@ -140,10 +99,24 @@ void TrackController::init(uint16_t hash, bool debug, bool loopback, uint64_t ti
 }
 
 /* -------------------------------------------------------------------
+   TrackController::setTimeout / getTimeout
+-------------------------------------------------------------------  */
+
+void TrackController::setTimeout(uint32_t timeOut)
+{
+    mTimeout = timeOut;
+}
+
+uint32_t TrackController::getTimeout() const
+{
+    return mTimeout;
+}
+
+/* -------------------------------------------------------------------
    TrackController::getHash
 -------------------------------------------------------------------  */
 
-uint16_t TrackController::getHash()
+uint16_t TrackController::getHash() const
 {
     return mHash;
 }
@@ -152,7 +125,7 @@ uint16_t TrackController::getHash()
    TrackController::isDebug
 -------------------------------------------------------------------  */
 
-bool TrackController::isDebug()
+bool TrackController::isDebug() const
 {
     return mDebug;
 }
@@ -161,7 +134,7 @@ bool TrackController::isDebug()
    TrackController::isLoopback
 -------------------------------------------------------------------  */
 
-bool TrackController::isLoopback()
+bool TrackController::isLoopback() const
 {
     return mLoopback;
 }
@@ -170,20 +143,19 @@ bool TrackController::isLoopback()
    TrackController::begin
 -------------------------------------------------------------------  */
 
-void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
+bool TrackController::begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin)
 {
     //--- Configure CAN
 
-#if defined ARDUINO_ARCH_ESP32
-    Serial.println("Configure ESP32 CAN");
+#if defined(ARDUINO_ARCH_ESP32)
     ACAN_ESP32_Settings settings(DESIRED_BIT_RATE); // Marklin CAN baudrate = 250Kbit/s
-    settings.mRxPin = (gpio_num_t)can_rx_pin;
-    settings.mTxPin = (gpio_num_t)can_tx_pin;
+    settings.mRxPin = static_cast<gpio_num_t>(can_rx_pin);
+    settings.mTxPin = static_cast<gpio_num_t>(can_tx_pin);
     const uint32_t errorCode = ACAN_ESP32::can.begin(settings);
-#elif defined ARDUINO_ARCH_AVR
-    //--- Begin SPI
+#elif defined(ARDUINO_ARCH_AVR)
+    (void)can_rx_pin; // pins are fixed by the SPI bus and RAILUINO_MCP2515_*
+    (void)can_tx_pin;
     SPI.begin();
-    Serial.println("Configure ACAN2515");
     ACAN2515Settings settings(QUARTZ_FREQUENCY, DESIRED_BIT_RATE);
     const uint16_t errorCode = can.begin(settings, []
                                          { can.isr(); });
@@ -191,31 +163,38 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
 
     if (errorCode)
     {
-        Serial.print("Configuration error 0x");
+        // Always reported: without CAN nothing else can work.
+        Serial.print(F("!!! CAN configuration error 0x"));
         Serial.println(errorCode, HEX);
+        return false;
     }
-    else
+
+    if (mDebug)
     {
-        Serial.print("Bit Rate prescaler: ");
+        Serial.print(F("Bit Rate prescaler: "));
         Serial.println(settings.mBitRatePrescaler);
-        Serial.print("Triple Sampling: ");
-        Serial.println(settings.mTripleSampling ? "yes" : "no");
-        Serial.print("Actual bit rate: ");
+        Serial.print(F("Triple Sampling: "));
+        Serial.println(settings.mTripleSampling ? F("yes") : F("no"));
+        Serial.print(F("Actual bit rate: "));
         Serial.print(settings.actualBitRate());
-        Serial.println(" bit/s");
-        Serial.print("Exact bit rate ? ");
-        Serial.println(settings.exactBitRate() ? "yes" : "no");
-        Serial.print("Sample point: ");
+        Serial.println(F(" bit/s"));
+        Serial.print(F("Exact bit rate ? "));
+        Serial.println(settings.exactBitRate() ? F("yes") : F("no"));
+        Serial.print(F("Sample point: "));
         Serial.print(settings.samplePointFromBitStart());
-        Serial.println("%");
+        Serial.println(F("%"));
+        Serial.println(F("Configuration CAN OK"));
     }
-    Serial.println("Configuration CAN OK");
-    Serial.println("");
 
     delay(500);
 
     if (!mLoopback)
     {
+        // Wakes up the Gleisbox when no MS2/CS is present. Sent once and
+        // without waiting for an answer, as in Railuino 0.9: on a real
+        // layout (Gleisbox 0x0011, firmware 1.47, with an MS2) the
+        // Gleisbox does not answer this message, so waiting only delayed
+        // the start-up by mTimeout and made begin() report a failure.
         TrackMessage message;
         message.clear();
         message.prio = 0x00;
@@ -223,30 +202,31 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
         message.response = false;
         message.length = 5;
         message.data[4] = 0x11;
-        sendMessage(message);
 
-        if (exchangeMessage(message, message, mTimeout))
-            Serial.println("Ok 0x11");
+        if (!sendMessage(message))
+        {
+            Serial.println(F("!!! Cannot send the Gleisbox wake-up message (0x1B 0x11)"));
+            return false;
+        }
     }
 
     if (mHash == 0)
         generateHash();
+
+    return true;
 }
 
 /* -------------------------------------------------------------------
    TrackController::end
 -------------------------------------------------------------------  */
 
- void TrackController::end() {
-// 	detachInterrupt(CAN_INT);
-
- 	CANMessage t;
-
- 	boolean b = dequeue(&t);
- 	while (b) {
- 		b = dequeue(&t);
- 	}
- }
+void TrackController::end()
+{
+    // Discards the messages waiting in the CAN driver's receive FIFO.
+    TrackMessage message;
+    while (receiveMessage(message))
+        ;
+}
 
 /* -------------------------------------------------------------------
    TrackController::sendMessage
@@ -256,11 +236,14 @@ bool TrackController::sendMessage(TrackMessage &message)
 {
     CANMessage frame;
 
+    if (message.length > 8)
+        return false;
+
     message.hash = mHash;
     frame.id = (static_cast<uint32_t>(message.prio) << 25) | (static_cast<uint32_t>(message.command) << 17) | (static_cast<uint32_t>(message.response) << 16) | message.hash;
     frame.ext = true;
     frame.len = message.length;
-    for (byte i = 0; i < message.length; i++)
+    for (uint8_t i = 0; i < message.length; i++)
         frame.data[i] = message.data[i];
 
     if (mDebug)
@@ -304,13 +287,14 @@ bool TrackController::receiveMessage(TrackMessage &message)
 
 #if defined(ARDUINO_ARCH_ESP32)
     bool result = ACAN_ESP32::can.receive(frame);
-#elif defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
+#elif defined(ARDUINO_ARCH_AVR)
     bool result = can.receive(frame);
 #endif
 
     if (result)
     {
         message.clear();
+        message.prio = (frame.id >> 25) & 0x0F;
         message.command = (frame.id >> 17) & 0xFF;
         message.hash = frame.id & 0xFFFF;
         message.response = (frame.id >> 16) & 0x01;
@@ -354,35 +338,73 @@ bool TrackController::receiveMessage(TrackMessage &message)
    TrackController::exchangeMessage
 -------------------------------------------------------------------  */
 
-bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint16_t timeout)
+bool TrackController::isResponseTo(const TrackMessage &out, const TrackMessage &in)
 {
+    if (!in.response || in.command != out.command)
+        return false;
 
-    uint16_t command = out.command;
+    // Same filter as before: ignore responses carrying 4 bytes or less.
+    if (in.length <= 4)
+        return false;
+
+    switch (out.command)
+    {
+    case 0x00: // System command: UID in data[0..3], sub-command in data[4]
+        if (out.length >= 5 && in.data[4] != out.data[4])
+            return false;
+        // fall through
+    case 0x04: // Speed
+    case 0x05: // Direction
+    case 0x06: // Function
+    case 0x07: // Read Config
+    case 0x08: // Write Config
+    case 0x0B: // Accessory
+        // The response must concern the same locomotive / accessory.
+        // Without this check, the answer for another locomotive (sent
+        // by an MS2 on the same bus) could be taken as ours.
+        for (uint8_t i = 0; i < 4; i++)
+            if (in.data[i] != out.data[i])
+                return false;
+        return true;
+
+    default: // Ping (0x18), Discovery (0x01), Bootloader (0x1B)...
+        return true;
+    }
+}
+
+bool TrackController::exchangeMessage(TrackMessage &out, TrackMessage &in, uint32_t timeout)
+{
+    // Keep a copy of the request: 'out' and 'in' may be the same object.
+    const TrackMessage request = out;
 
     if (!sendMessage(out))
     {
+        // Previously: setPower(false) then for(;;) in debug mode, which
+        // froze the controller. The caller now decides what to do.
         if (mDebug)
-        {
             Serial.println(F("!!! Send error"));
-            Serial.println(F("!!! Emergency stop"));
-            setPower(false);
-            for (;;)
-                ;
-        }
+        return false;
     }
 
-    // uint32_t time = millis();
-    uint64_t time = millis();
+    // Unsigned subtraction: stays correct when millis() wraps around
+    // (every 49.7 days). "millis() < start + timeout" did not.
+    const uint32_t start = millis();
 
-    /* -- TrackMessage response -- */
-
-    while (millis() < time + timeout)
+    while (millis() - start < timeout)
     {
         in.clear();
-        boolean result = receiveMessage(in);
+        const bool received = receiveMessage(in);
 
-        if (result && in.command == command && in.response&& in.length > 4)
+        if (received && mDebug)
+        {
+            Serial.println(F("=== TRAME CAN RECUE ==="));
+            in.printTo(Serial);
+            Serial.println();
+        }
+
+        if (received && isResponseTo(request, in))
             return true;
+        yield();
     }
 
     if (mDebug)
@@ -502,11 +524,11 @@ bool TrackController::locoDiscovery()
     message.length = 5;
     message.data[0] = 0xF9; // MFX protocole;
     message.data[1] = 0xE6; // MFX protocole;
-    message.data[2] = 0x1; // MFX protocole;
+    message.data[2] = 0x1;  // MFX protocole;
     message.data[3] = 0x20; // MFX protocole;
     message.data[4] = 0x20; // MFX protocole;
 
-    //sendMessage(message);
+    // sendMessage(message);
 
     if (exchangeMessage(message, message, 60UL * 1000UL))
     {
@@ -662,7 +684,7 @@ bool TrackController::emergency(const uint16_t address)
    TrackController::setLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoDirection(const uint16_t address, byte direction)
+bool TrackController::setLocoDirection(const uint16_t address, uint8_t direction)
 {
     TrackMessage message;
 
@@ -709,7 +731,7 @@ bool TrackController::toggleLocoDirection(const uint16_t address)
    TrackController::getLocoDirection
 -------------------------------------------------------------------  */
 
-bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
+bool TrackController::getLocoDirection(const uint16_t address, uint8_t *direction)
 {
     TrackMessage message;
 
@@ -732,7 +754,7 @@ bool TrackController::getLocoDirection(const uint16_t address, byte *direction)
    TrackController::setLocoFunction
 -------------------------------------------------------------------  */
 
-bool TrackController::setLocoFunction(const uint16_t address, byte function, byte power)
+bool TrackController::setLocoFunction(const uint16_t address, uint8_t function, uint8_t power)
 {
     TrackMessage message;
 
@@ -751,7 +773,7 @@ bool TrackController::setLocoFunction(const uint16_t address, byte function, byt
    TrackController::readConfig
 -------------------------------------------------------------------  */
 
-bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *value)
+bool TrackController::readConfig(const uint16_t address, uint16_t number, uint8_t *value)
 {
     TrackMessage message;
 
@@ -764,23 +786,22 @@ bool TrackController::readConfig(const uint16_t address, uint16_t number, byte *
     message.data[5] = lowByte(number);
     message.data[6] = 0x01;
 
-    if (exchangeMessage(message, message, 10000))
+    if (exchangeMessage(message, message, CV_TIMEOUT))
     {
         value[0] = message.data[6];
         return true;
     }
     else
-        {
+    {
         return false;
-        }
+    }
 }
-
 
 /* -------------------------------------------------------------------
    TrackController::getLocoFunction
 -------------------------------------------------------------------  */
 
-bool TrackController::getLocoFunction(const uint16_t address, byte function, byte *power)
+bool TrackController::getLocoFunction(const uint16_t address, uint8_t function, uint8_t *power)
 {
     TrackMessage message;
 
@@ -822,9 +843,9 @@ bool TrackController::setLocoSpeed(const uint16_t address, uint16_t speed)
 /* -------------------------------------------------------------------
    TrackController::toggleLocoFunction
 -------------------------------------------------------------------  */
-bool TrackController::toggleLocoFunction(const uint16_t address, byte function)
+bool TrackController::toggleLocoFunction(const uint16_t address, uint8_t function)
 {
-    byte power;
+    uint8_t power;
     if (getLocoFunction(address, function, &power))
     {
         return setLocoFunction(address, function, power ? 0 : 1);
@@ -835,7 +856,7 @@ bool TrackController::toggleLocoFunction(const uint16_t address, byte function)
 /* -------------------------------------------------------------------
    TrackController::setAccessory
 -------------------------------------------------------------------  */
-boolean TrackController::setAccessory(const uint16_t address, byte position, byte power, uint16_t time)
+bool TrackController::setAccessory(const uint16_t address, uint8_t position, uint8_t power, uint16_t time)
 {
     TrackMessage message;
 
@@ -847,12 +868,14 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
     message.data[4] = position;
     message.data[5] = power;
 
-    exchangeMessage(message, message, mTimeout);
+    bool ok = exchangeMessage(message, message, mTimeout);
 
     if (time != 0)
     {
         delay(time);
 
+        // Switch the coil off (power = 0). Always sent, even if the first
+        // message was not acknowledged, so that a coil is never left on.
         message.clear();
         message.command = 0x0B;
         message.length = 6;
@@ -860,9 +883,9 @@ boolean TrackController::setAccessory(const uint16_t address, byte position, byt
         message.data[3] = (address & 0x00FF);
         message.data[4] = position;
 
-        exchangeMessage(message, message, mTimeout);
+        ok = exchangeMessage(message, message, mTimeout) && ok;
     }
-    return true;
+    return ok;
 }
 
 /* -------------------------------------------------------------------
@@ -900,7 +923,7 @@ bool TrackController::getLocoSpeed(const uint16_t address, uint16_t *speed)
 /* -------------------------------------------------------------------
    TrackController::getAccessory
 -------------------------------------------------------------------  */
-bool TrackController::getAccessory(const uint16_t address, byte *position, byte *power)
+bool TrackController::getAccessory(const uint16_t address, uint8_t *position, uint8_t *power)
 {
     TrackMessage message;
 
@@ -925,46 +948,42 @@ bool TrackController::getAccessory(const uint16_t address, byte *position, byte 
 /* -------------------------------------------------------------------
    TrackController::getVersion
 -------------------------------------------------------------------  */
-bool TrackController::getVersion(byte *high, byte *low)
+bool TrackController::getVersion(uint8_t *high, uint8_t *low)
 {
-    bool result = false;
-
+    // Ping (0x18): every device on the bus answers with its software
+    // version in data[4..5] and its device type in data[6..7]. The MS2
+    // often answers first, so we keep listening until a Gleisbox has
+    // answered or the timeout expires. Device types: 0x0010 (Gleisbox
+    // 60112/60113 as documented in Railuino 0.9) and 0x0011 (observed on
+    // a Gleisbox with firmware 1.47).
     TrackMessage message;
-
     message.clear();
     message.command = 0x18;
 
-    if (exchangeMessage(message, message, mTimeout))
+    if (!sendMessage(message))
+        return false;
+
+    const uint32_t start = millis();
+    while (millis() - start < mTimeout)
     {
-        Serial.print("version : ");
-        Serial.print(message.data[4]);
-        Serial.println(message.data[5]);
-        return result = true;
+        if (receiveMessage(message) && message.command == 0x18 && message.response && message.length == 8 && message.data[6] == 0x00 && (message.data[7] == 0x10 || message.data[7] == 0x11))
+        {
+            if (high != nullptr)
+                *high = message.data[4];
+            if (low != nullptr)
+                *low = message.data[5];
+            return true;
+        }
+        yield();
     }
-
-    // sendMessage(message);
-
-     delay(500);
-     message.clear();
-     while (receiveMessage(message)) {
-    //   if (message.command == 0x18 && message.response) {
-         if (message.command == 0x18 && message.data[6] == 0x00 && message.data[7] == 0x10) {
-          (*high) = message.data[4];
-          (*low) = message.data[5];
-    //     Serial.print("version : ");
-    //     Serial.print(message.data[4]);
-    //     Serial.println(message.data[5]);
-         result = true;
-       }
-     }
-    return result;
+    return false;
 }
 
 /* -------------------------------------------------------------------
    TrackController::writeConfig
 -------------------------------------------------------------------  */
 
-bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte value)
+bool TrackController::writeConfig(const uint16_t address, uint16_t number, uint8_t value)
 {
     TrackMessage message;
 
@@ -978,7 +997,8 @@ bool TrackController::writeConfig(const uint16_t address, uint16_t number, byte 
     message.data[5] = lowByte(number);
     message.data[6] = value;
 
-    return exchangeMessage(message, message, mTimeout);
+    // CV_TIMEOUT (10 s), as in Railuino 0.9: a write can take seconds.
+    return exchangeMessage(message, message, CV_TIMEOUT);
 }
 
 /* -------------------------------------------------------------------
@@ -1019,9 +1039,12 @@ void TrackController::handleUserCommands(String command)
     else if (command.startsWith("accessory "))
     {
         uint16_t address = command.substring(10, 15).toInt();
+        // Format: "accessory AAAAA P W TTT" (address on 5 digits,
+        // position, power, time in ms). Power used to be read at
+        // index 17, i.e. on the space, and was therefore always 0.
         uint8_t position = command.substring(16, 17).toInt();
-        uint8_t power = command.substring(17, 18).toInt();
-        uint16_t time = command.substring(19).toInt();
+        uint8_t power = command.substring(18, 19).toInt();
+        uint16_t time = command.substring(20).toInt();
         setAccessory(address, position, power, time);
     }
     //}
