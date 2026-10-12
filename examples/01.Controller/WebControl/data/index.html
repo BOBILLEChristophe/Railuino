@@ -11,7 +11,10 @@
     <h1>Track Controller</h1>
      <div id="logWindow" class="log-window"></div>
     <div class="image-buttons">
-        <img src="image1.jpg" class="address-button" data-address="16389">
+        <!-- data-uid : UID MFX de la loco (voir /locos ou le moniteur série).
+             L'adresse est alors retrouvée même si la MS2 la change ;
+             data-address sert tant que l'UID n'est pas connu. -->
+        <img src="image1.jpg" class="address-button" data-uid="FFE9B194" data-address="16391">
         <img src="image2.jpg" class="address-button" data-address="16390">
         <img src="image3.jpg" class="address-button" data-address="12000">
         <img src="image4.jpg" class="address-button" data-address="13000">

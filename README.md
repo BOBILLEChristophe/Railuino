@@ -114,7 +114,7 @@ Dans `examples/01.Controller` :
 | Monitor | Affiche et décode les commandes de la MS2 (adresse d'une loco…) | toutes |
 | DesktopStation | Passerelle pour le logiciel Desktop Station (d'après Uwe Monreal) | toutes |
 | TcpCommand | Mêmes commandes en TCP (port 15731) | ESP32 |
-| WebControl | Interface web (pages dans `data/`) | ESP32 |
+| WebControl | Interface web (pages dans `data/`) ; locos MFX désignées par leur UID (`data-uid`), adresse suivie automatiquement | ESP32 |
 
 Dans `examples/02.Drivers` : `Mcp2515OnEsp32`, un ESP32 avec un module MCP2515 au lieu de son contrôleur intégré.
 

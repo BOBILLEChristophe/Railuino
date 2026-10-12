@@ -139,6 +139,13 @@ public:
   uint32_t uidOf(uint16_t locIdOrSid) const;
 
   /**
+   * Records by hand that 'uid' has this Loc-ID (0x4000 + SID) or SID,
+   * e.g. read on the MS2. Later Bind messages of the MS2 update it.
+   * Returns false if the table is full or the values are 0.
+   */
+  bool assign(uint32_t uid, uint16_t locIdOrSid);
+
+  /**
    * Number of used entries, and access to them (0 .. size() - 1).
    */
   uint8_t size() const;
