@@ -1,6 +1,7 @@
 # Runs on every push and pull request:
 #   1. unit tests on Linux (pio test -e native, simulated CAN bus);
-#   2. every example compiled for ESP32, Uno and Mega.
+#   2. every example compiled for ESP32, Uno and Mega;
+#   3. Arduino Lint: the rules of the Arduino Library Manager.
 name: CI
 
 on:
@@ -49,3 +50,14 @@ jobs:
           fi
           exit $status
         shell: bash
+
+  arduino-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # "submit": rules for a first registration in the Library Manager.
+      # Change to "update" once Railuino is listed.
+      - uses: arduino/arduino-lint-action@v2
+        with:
+          library-manager: submit
+          compliance: strict
