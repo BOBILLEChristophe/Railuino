@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.10.0 — unreleased (phase 2: library layout)
+## 0.11.0 — unreleased (phase 3: CAN drivers, tests, CI)
+
+### Added
+- `CanDriver` interface (`src/CanDriver.h`) with two drivers: `Esp32TwaiDriver` (ESP32 built-in controller, ACAN_ESP32) and `Mcp2515Driver` (MCP2515 on SPI, ACAN2515), which now also works on ESP32.
+- `TrackController(CanDriver&, hash, debug, timeout, loopback)` to choose the driver; `begin()` without pins.
+- Example `02.Drivers/Mcp2515OnEsp32`.
+- Unit tests with PlatformIO and Unity: `pio test -e native` (17 tests, simulated CAN bus).
+- GitHub Actions: unit tests and every example on every push and pull request.
+
+### Changed
+- Existing sketches are unchanged: without a driver, `TrackController` uses the TWAI controller on ESP32 and an MCP2515 on AVR.
+- The `RAILUINO_MCP2515_*` defaults moved to `Mcp2515Driver.h`.
+- Standard (11 bit) CAN frames are ignored.
+
+### Removed
+- `extras/host_tests` (replaced by `pio test -e native`).
+
+## 0.10.0 — 2026-10-12 (phase 2: library layout)
 
 ### Breaking changes
 - Sketches include `<Railuino.h>` instead of `"Config.h"` and `"TrackController.h"` copied next to them.
