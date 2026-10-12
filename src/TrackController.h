@@ -149,14 +149,14 @@ public:
    * messages. CAN messages are put into an internal buffer of
    * limited size, so they don't get lost, but you have to take
    * care of them in time. Otherwise the buffer might overflow.
-   * default CAN Rx pin is GPIO_NUM_5 and can_tx_pin is GPIO_NUM_4
+   * On ESP32 the default pins are CAN_RX_PIN and CAN_TX_PIN, defined
+   * in Config.h. On AVR the pins are ignored (MCP2515 on the SPI bus,
+   * see RAILUINO_MCP2515_* in TrackController.cpp).
+   * Returns false if the CAN controller could not be configured or if
+   * the Gleisbox did not answer the wake-up message.
    */
-
-  // void begin(const gpio_num_t can_rx_pin = GPIO_NUM_5,
-  //            const gpio_num_t can_tx_pin = GPIO_NUM_4);
-
-  void begin(const byte can_rx_pin = CAN_RX_PIN,
-             const byte can_tx_pin = CAN_TX_PIN);
+  bool begin(const uint8_t can_rx_pin = CAN_RX_PIN,
+             const uint8_t can_tx_pin = CAN_TX_PIN);
 
   /**
    * Generates a new hash and makes sure it does not conflict

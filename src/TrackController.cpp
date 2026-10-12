@@ -19,57 +19,38 @@
 
 #include "TrackController.h"
 
-#if defined ARDUINO_ARCH_ESP32
+#if defined(ARDUINO_ARCH_ESP32)
 #include <ACAN_ESP32.h> // https://github.com/pierremolinaro/acan-esp32.git
-#include <Arduino.h>
-#elif defined ARDUINO_ARCH_AVR
+
+#elif defined(ARDUINO_ARCH_AVR)
 #include <ACAN2515.h> // https://github.com/pierremolinaro/acan2515.git
-static const uint32_t QUARTZ_FREQUENCY = 16UL * 1000UL * 1000UL; // 16 MHz
-static const byte MCP2515_INT = 2;                               // INT output of MCP2515 (adapt to your design)
-static const byte MCP2515_CS = 10;                               // CS input of MCP2515 (adapt to your design)
-ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
+
+// MCP2515 wiring and quartz. The defaults match the usual Uno/Mega
+// shields; override them without touching the library, for instance in
+// platformio.ini:
+//   build_flags = -D RAILUINO_MCP2515_QUARTZ=8000000UL -D RAILUINO_MCP2515_CS=53
+// Many cheap MCP2515 modules carry an 8 MHz quartz: with the wrong value
+// the bit rate is wrong and nothing is received.
+#ifndef RAILUINO_MCP2515_QUARTZ
+#define RAILUINO_MCP2515_QUARTZ 16000000UL // 16 MHz
+#endif
+#ifndef RAILUINO_MCP2515_CS
+#define RAILUINO_MCP2515_CS 10 // CS input of MCP2515
+#endif
+#ifndef RAILUINO_MCP2515_INT
+#define RAILUINO_MCP2515_INT 2 // INT output of MCP2515
+#endif
+
+static const uint32_t QUARTZ_FREQUENCY = RAILUINO_MCP2515_QUARTZ;
+static const uint8_t MCP2515_CS = RAILUINO_MCP2515_CS;
+static const uint8_t MCP2515_INT = RAILUINO_MCP2515_INT;
+static ACAN2515 can(MCP2515_CS, SPI, MCP2515_INT);
+
+#else
+#error "Railuino supports ESP32 (TWAI) and AVR boards with an MCP2515 (Uno, Mega...)"
 #endif
 
 static const uint32_t DESIRED_BIT_RATE = 250UL * 1000UL; // Marklin CAN baudrate = 250Kbit/s
-
-#define SIZE 32
-
-CANMessage _buffer[SIZE];
-
-volatile uint16_t posRead = 0;
-
-volatile uint16_t posWrite = 0;
-
-volatile bool lastOpWasWrite = false;
-
-bool dequeue(CANMessage *p)
-{
-    noInterrupts();
-
-    if (posWrite == posRead && !lastOpWasWrite)
-    {
-        interrupts();
-        return false;
-    }
-
-    memcpy(p, &_buffer[posRead], sizeof(CANMessage));
-    /*
-        p->id=_buffer[posRead].id;
-        p->length=_buffer[posRead].length;
-
-        for (int i = 0; i < p->length; i++) {
-            p->data[i] = _buffer[posRead].data[i];
-        }
-    */
-    //*p = _buffer[posRead];
-
-    posRead = (posRead + 1) % SIZE;
-    lastOpWasWrite = false;
-
-    interrupts();
-
-    return true;
-}
 
 /* -------------------------------------------------------------------
    TrackController (constructor / destructor)
@@ -162,20 +143,19 @@ bool TrackController::isLoopback() const
    TrackController::begin
 -------------------------------------------------------------------  */
 
-void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
+bool TrackController::begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin)
 {
     //--- Configure CAN
 
-#if defined ARDUINO_ARCH_ESP32
-    Serial.println("Configure ESP32 CAN");
+#if defined(ARDUINO_ARCH_ESP32)
     ACAN_ESP32_Settings settings(DESIRED_BIT_RATE); // Marklin CAN baudrate = 250Kbit/s
-    settings.mRxPin = (gpio_num_t)can_rx_pin;
-    settings.mTxPin = (gpio_num_t)can_tx_pin;
+    settings.mRxPin = static_cast<gpio_num_t>(can_rx_pin);
+    settings.mTxPin = static_cast<gpio_num_t>(can_tx_pin);
     const uint32_t errorCode = ACAN_ESP32::can.begin(settings);
-#elif defined ARDUINO_ARCH_AVR
-    //--- Begin SPI
+#elif defined(ARDUINO_ARCH_AVR)
+    (void)can_rx_pin; // pins are fixed by the SPI bus and RAILUINO_MCP2515_*
+    (void)can_tx_pin;
     SPI.begin();
-    Serial.println("Configure ACAN2515");
     ACAN2515Settings settings(QUARTZ_FREQUENCY, DESIRED_BIT_RATE);
     const uint16_t errorCode = can.begin(settings, []
                                          { can.isr(); });
@@ -183,31 +163,38 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
 
     if (errorCode)
     {
-        Serial.print("Configuration error 0x");
+        // Always reported: without CAN nothing else can work.
+        Serial.print(F("!!! CAN configuration error 0x"));
         Serial.println(errorCode, HEX);
+        return false;
     }
-    else
+
+    if (mDebug)
     {
-        Serial.print("Bit Rate prescaler: ");
+        Serial.print(F("Bit Rate prescaler: "));
         Serial.println(settings.mBitRatePrescaler);
-        Serial.print("Triple Sampling: ");
-        Serial.println(settings.mTripleSampling ? "yes" : "no");
-        Serial.print("Actual bit rate: ");
+        Serial.print(F("Triple Sampling: "));
+        Serial.println(settings.mTripleSampling ? F("yes") : F("no"));
+        Serial.print(F("Actual bit rate: "));
         Serial.print(settings.actualBitRate());
-        Serial.println(" bit/s");
-        Serial.print("Exact bit rate ? ");
-        Serial.println(settings.exactBitRate() ? "yes" : "no");
-        Serial.print("Sample point: ");
+        Serial.println(F(" bit/s"));
+        Serial.print(F("Exact bit rate ? "));
+        Serial.println(settings.exactBitRate() ? F("yes") : F("no"));
+        Serial.print(F("Sample point: "));
         Serial.print(settings.samplePointFromBitStart());
-        Serial.println("%");
+        Serial.println(F("%"));
+        Serial.println(F("Configuration CAN OK"));
     }
-    Serial.println("Configuration CAN OK");
-    Serial.println("");
 
     delay(500);
 
+    bool ok = true;
+
     if (!mLoopback)
     {
+        // Wakes up the Gleisbox (60112/60113). Sent once: exchangeMessage()
+        // sends the message itself (it used to be sent a second time
+        // with sendMessage() just before).
         TrackMessage message;
         message.clear();
         message.prio = 0x00;
@@ -215,14 +202,16 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
         message.response = false;
         message.length = 5;
         message.data[4] = 0x11;
-        sendMessage(message);
 
-        if (exchangeMessage(message, message, mTimeout))
-            Serial.println("Ok 0x11");
+        ok = exchangeMessage(message, message, mTimeout);
+        if (mDebug)
+            Serial.println(ok ? F("Gleisbox OK (0x1B 0x11)") : F("!!! No answer from Gleisbox (0x1B 0x11)"));
     }
 
     if (mHash == 0)
         generateHash();
+
+    return ok;
 }
 
 /* -------------------------------------------------------------------
@@ -231,15 +220,10 @@ void TrackController::begin(const byte can_rx_pin, const byte can_tx_pin)
 
 void TrackController::end()
 {
-    // 	detachInterrupt(CAN_INT);
-
-    CANMessage t;
-
-    boolean b = dequeue(&t);
-    while (b)
-    {
-        b = dequeue(&t);
-    }
+    // Discards the messages waiting in the CAN driver's receive FIFO.
+    TrackMessage message;
+    while (receiveMessage(message))
+        ;
 }
 
 /* -------------------------------------------------------------------
@@ -249,6 +233,9 @@ void TrackController::end()
 bool TrackController::sendMessage(TrackMessage &message)
 {
     CANMessage frame;
+
+    if (message.length > 8)
+        return false;
 
     message.hash = mHash;
     frame.id = (static_cast<uint32_t>(message.prio) << 25) | (static_cast<uint32_t>(message.command) << 17) | (static_cast<uint32_t>(message.response) << 16) | message.hash;
@@ -298,13 +285,14 @@ bool TrackController::receiveMessage(TrackMessage &message)
 
 #if defined(ARDUINO_ARCH_ESP32)
     bool result = ACAN_ESP32::can.receive(frame);
-#elif defined(ARDUINO_AVR_UNO) || defined(ARDUINO_AVR_MEGA2560)
+#elif defined(ARDUINO_ARCH_AVR)
     bool result = can.receive(frame);
 #endif
 
     if (result)
     {
         message.clear();
+        message.prio = (frame.id >> 25) & 0x0F;
         message.command = (frame.id >> 17) & 0xFF;
         message.hash = frame.id & 0xFFFF;
         message.response = (frame.id >> 16) & 0x01;
