@@ -30,6 +30,17 @@
     }
   ],
   "export": {
-    "exclude": [".vscode", ".pio", "extras/reference"]
+    "exclude": [
+      ".vscode",
+      ".pio",
+      ".github",
+      "extras/reference",
+      "test",
+      "platformio.ini",
+      "*.tar.gz",
+      "**/secrets.h",
+      "examples/01.Controller/WebControl/secrets.h",
+      "examples/01.Controller/TcpCommand/secrets.h"
+    ]
   }
 }
