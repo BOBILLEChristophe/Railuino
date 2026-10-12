@@ -20,7 +20,7 @@ for dir in examples/*/*/; do
     dir=${dir%/}
     name=$(basename "$dir")
     case "$name" in
-        WebControl | TcpCommand) envs="esp32dev" ;;
+        WebControl | TcpCommand | Mcp2515OnEsp32) envs="esp32dev" ;;
         *) envs="esp32dev uno megaatmega2560" ;;
     esac
 

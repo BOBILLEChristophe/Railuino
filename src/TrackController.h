@@ -24,6 +24,7 @@
 #include <Arduino.h>
 #include "TrackMessage.h"
 #include "Config.h"
+#include "CanDriver.h"
 
 // ===================================================================
 // === TrackController ===============================================
@@ -43,6 +44,11 @@ class TrackController
 {
 
 private:
+  /**
+   * The CAN controller used to talk to the layout.
+   */
+  CanDriver *mCan;
+
   /**
    * Stores the hash of our controller. This must not conflict with
    * hashes of other devices in the setup (most likely the MS2 and
@@ -102,6 +108,18 @@ public:
   explicit TrackController(uint16_t hash, bool debug = false,
                            uint32_t timeOut = DEFAULT_TIMEOUT,
                            bool loopback = false);
+
+  /**
+   * Same, with an explicit CAN driver, for instance an MCP2515 on an
+   * ESP32 or a driver of your own:
+   *   Mcp2515Driver can(5, 4, 8000000UL);  // CS, INT, quartz
+   *   TrackController ctrl(can, 0xDF24);
+   * Without a driver, TrackController uses the ESP32 TWAI controller
+   * on ESP32 and an MCP2515 (RAILUINO_MCP2515_*) on AVR.
+   */
+  explicit TrackController(CanDriver &can, uint16_t hash = 0, bool debug = false,
+                           uint32_t timeOut = DEFAULT_TIMEOUT,
+                           bool loopback = false);
   /**
    * Is called when a TrackController is being destroyed. Does the
    * necessary cleanup. No need to call this manually.
@@ -149,14 +167,19 @@ public:
    * messages. CAN messages are put into an internal buffer of
    * limited size, so they don't get lost, but you have to take
    * care of them in time. Otherwise the buffer might overflow.
-   * On ESP32 the default pins are CAN_RX_PIN and CAN_TX_PIN, defined
-   * in Config.h. On AVR the pins are ignored (MCP2515 on the SPI bus,
-   * see RAILUINO_MCP2515_* in TrackController.cpp).
+   * The pins are those of the ESP32 TWAI controller; they are ignored
+   * by the MCP2515 driver (SPI bus, see RAILUINO_MCP2515_* in
+   * Mcp2515Driver.h).
    * Returns false if the CAN controller could not be configured or the
    * Gleisbox wake-up message could not be sent.
    */
-  bool begin(const uint8_t can_rx_pin = CAN_RX_PIN,
-             const uint8_t can_tx_pin = CAN_TX_PIN);
+  bool begin(const uint8_t can_rx_pin, const uint8_t can_tx_pin);
+
+  /**
+   * Same, keeping the pins of the driver (CAN_RX_PIN / CAN_TX_PIN from
+   * Config.h for the default ESP32 driver).
+   */
+  bool begin();
 
   /**
    * Generates a new hash and makes sure it does not conflict

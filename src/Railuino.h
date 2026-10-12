@@ -20,8 +20,9 @@
  *
  *   #include <Railuino.h>
  *
- * Supported boards: ESP32 (built-in TWAI controller, ACAN_ESP32 library)
- * and AVR boards such as Uno and Mega with an MCP2515 (ACAN2515 library).
+ * Supported boards: ESP32 (built-in TWAI controller, ACAN_ESP32 library,
+ * or an MCP2515) and AVR boards such as Uno and Mega with an MCP2515
+ * (ACAN2515 library). See CanDriver.h.
  */
 
 #ifndef RAILUINO_H
@@ -30,6 +31,9 @@
 #include <Arduino.h>
 
 #include "Config.h"
+#include "CanDriver.h"
+#include "Esp32TwaiDriver.h"
+#include "Mcp2515Driver.h"
 #include "TrackMessage.h"
 #include "TrackController.h"
 #include "TrackReporterS88.h"
@@ -38,8 +42,8 @@
  * Library version, kept in sync with library.properties and library.json.
  */
 #define RAILUINO_VERSION_MAJOR 0
-#define RAILUINO_VERSION_MINOR 10
+#define RAILUINO_VERSION_MINOR 11
 #define RAILUINO_VERSION_PATCH 0
-#define RAILUINO_VERSION_STRING "0.10.0"
+#define RAILUINO_VERSION_STRING "0.11.0"
 
 #endif // RAILUINO_H
