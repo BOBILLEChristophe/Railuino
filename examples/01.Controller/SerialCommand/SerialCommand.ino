@@ -19,13 +19,14 @@
  * Controls the layout from the serial monitor (115200 baud, newline).
  * Pilote le réseau depuis le moniteur série (115200 bauds, fin de ligne LF).
  *
- * Commands (addresses on 5 digits) / Commandes (adresses sur 5 chiffres) :
- *   power 1                      power on (0 = off)
- *   speed 16391 100              speed 100 for MFX loco 7 (0x4000 + 7)
- *   direction 16391 3            3 = toggle, 1 = forward, 2 = reverse
- *   function 16391 0 1           function 0 (lights) on
- *   accessory 12289 1 1 200      accessory 0x3001: position 1, power 1, 200 ms
- *   emergency 16391              emergency stop of one locomotive
+ * Type "help" for the list of commands. Addresses are Loc-IDs, in decimal
+ * or hexadecimal: 16391 or 0x4007 for MFX loco 7.
+ *   power 1
+ *   speed 0x4007 300
+ *   function 0x4007 0 1
+ *   direction 0x4007 3
+ *   accessory 0x3001 1 1 200
+ * Each command answers "ok" or "error: ...".
  */
 
 #include <Railuino.h>
@@ -39,6 +40,10 @@ const uint8_t CAN_TX = 23;
 const bool DEBUG = false;
 
 TrackController ctrl(0, DEBUG);
+CommandParser parser(ctrl);
+
+char line[CommandParser::MAX_LINE + 1];
+uint8_t length = 0;
 
 void setup()
 {
@@ -46,16 +51,27 @@ void setup()
   while (!Serial)
     ;
   ctrl.begin(CAN_RX, CAN_TX);
-  Serial.println(F("Ready. Type a command, e.g. power 1"));
+  Serial.println(F("Ready. Type a command, e.g. power 1 (help for the list)"));
 }
 
 void loop()
 {
-  if (Serial.available())
+  // Reads a line without String, to save RAM on a Uno.
+  while (Serial.available())
   {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    Serial.println(command);
-    ctrl.handleUserCommands(command);
+    const char c = Serial.read();
+    if (c == '\n' || c == '\r')
+    {
+      if (length > 0)
+      {
+        line[length] = 0;
+        Serial.println(line);
+        parser.execute(line, &Serial);
+        length = 0;
+      }
+    }
+    else if (length < CommandParser::MAX_LINE)
+      line[length++] = c;
   }
+  ctrl.poll(); // keeps the CAN receive queue empty
 }

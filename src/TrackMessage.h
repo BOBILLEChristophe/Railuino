@@ -21,6 +21,7 @@
  
  #include <Arduino.h>
  #include <Printable.h>
+ #include "MarklinProtocol.h"
  
  /**
   * Represents a message going through the Marklin CAN bus. More or
@@ -64,6 +65,37 @@
       * easy recycling of TrackMessage objects.
       */
      void clear();
+
+     /**
+      * Builds a message: command, UID (data[0..3]) and length; the other
+      * fields are zero. For instance a speed command for MFX loco 7:
+      *   TrackMessage m = TrackMessage::make(Marklin::Cmd::Speed, 0x4007, 6);
+      *   m.data[4] = highByte(speed);
+      *   m.data[5] = lowByte(speed);
+      */
+     static TrackMessage make(uint8_t command, uint32_t uid, uint8_t length);
+
+     /**
+      * Same, for a system command with its sub-command in data[4]
+      * (length 5 at least).
+      */
+     static TrackMessage makeSystem(uint8_t subCommand, uint32_t uid = 0, uint8_t length = 5);
+
+     /**
+      * The 32 bit UID (or Loc-ID) in data[0..3], big endian.
+      */
+     uint32_t uid() const;
+     void setUid(uint32_t uid);
+
+     /**
+      * The 29 bit CAN identifier: prio, command, response bit and hash.
+      */
+     uint32_t canId() const;
+
+     /**
+      * Fills prio, command, response and hash from a CAN identifier.
+      */
+     void setCanId(uint32_t id);
      /**
       * Prints the message to the given Print object, which could be a
       * Serial object, for instance. The message format looks like this

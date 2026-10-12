@@ -270,6 +270,157 @@ void test_s88_with_32_modules()
     TEST_ASSERT_EQUAL_INT(32, g_digitalReads);
 }
 
+
+// ---------------------------------------------------------------- phase 4
+
+void test_message_builder_and_uid()
+{
+    TrackMessage m = TrackMessage::make(Marklin::Cmd::Speed, 0x4007, 6);
+    TEST_ASSERT_EQUAL_HEX8(0x04, m.command);
+    TEST_ASSERT_EQUAL_UINT8(6, m.length);
+    const uint8_t uid[4] = {0x00, 0x00, 0x40, 0x07};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(uid, m.data, 4);
+    TEST_ASSERT_EQUAL_HEX32(0x4007, m.uid());
+
+    m.setUid(0xFFE9B194UL); // MFX UID seen on the layout
+    TEST_ASSERT_EQUAL_HEX32(0xFFE9B194UL, m.uid());
+
+    TrackMessage s = TrackMessage::makeSystem(Marklin::SysCmd::Go);
+    TEST_ASSERT_EQUAL_HEX8(0x00, s.command);
+    TEST_ASSERT_EQUAL_UINT8(5, s.length);
+    TEST_ASSERT_EQUAL_HEX8(0x01, s.data[4]);
+
+    TrackMessage c;
+    c.clear();
+    c.setCanId(0x93363); // speed answer from the Gleisbox
+    TEST_ASSERT_EQUAL_HEX8(0x04, c.command);
+    TEST_ASSERT_TRUE(c.response);
+    TEST_ASSERT_EQUAL_HEX16(0x3363, c.hash);
+    TEST_ASSERT_EQUAL_HEX32(0x93363, c.canId());
+}
+
+static int handled = 0;
+static TrackMessage lastHandled;
+static void handler(const TrackMessage &m, void *context)
+{
+    handled++;
+    lastHandled = m;
+    if (context != nullptr)
+        (*static_cast<int *>(context))++;
+}
+
+void test_poll_passes_ms2_commands_to_the_handler()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    int calls = 0;
+    handled = 0;
+    ctrl.onMessage(handler, &calls);
+    // The MS2 (hash 8B23) drives loco 0x4007 at speed 100.
+    CanFrame f;
+    f.id = (0x04UL << 17) | 0x8B23;
+    f.len = 6;
+    const uint8_t d[6] = {0, 0, 0x40, 0x07, 0x00, 0x64};
+    memcpy(f.data, d, 6);
+    bus->rx.push_back(f);
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_INT(1, handled);
+    TEST_ASSERT_EQUAL_INT(1, calls);
+    TEST_ASSERT_EQUAL_HEX32(0x4007, lastHandled.uid());
+    TEST_ASSERT_EQUAL_HEX16(0x8B23, lastHandled.hash);
+}
+
+void test_messages_received_while_waiting_are_not_lost()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    handled = 0;
+    ctrl.onMessage(handler);
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) != 0x06)
+            return;
+        CanFrame ping;
+        ping.id = (0x18UL << 17) | 0x8B23;
+        bus->rx.push_back(ping);
+        bus->rx.push_back(answer(0x06, {0, 0, 0x40, 0x05, 0x02, 0x01}));
+    };
+    TEST_ASSERT_TRUE(ctrl.setLocoFunction(0x4005, 2, 1));
+    TEST_ASSERT_EQUAL_INT(1, handled); // the MS2 ping, not our answer
+    TEST_ASSERT_EQUAL_HEX8(0x18, lastHandled.command);
+}
+
+void test_log_goes_to_the_chosen_output()
+{
+    Serial.out.clear();
+    TrackController quiet(*bus, 0xDF24, false, 10);
+    quiet.setLocoSpeed(0x4005, 1);
+    TEST_ASSERT_TRUE(Serial.out.empty());
+    TEST_ASSERT_FALSE(quiet.isDebug());
+
+    Print other;
+    quiet.setLog(&other);
+    TEST_ASSERT_TRUE(quiet.isDebug());
+    quiet.setLocoSpeed(0x4005, 1);
+    TEST_ASSERT_TRUE(Serial.out.empty());
+    TEST_ASSERT_TRUE(other.out.find("<== ID : 0x8DF24") != std::string::npos);
+}
+
+void test_direction_enum()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 10);
+    ctrl.setLocoDirection(0x4005, Marklin::Direction::Reverse);
+    TEST_ASSERT_EQUAL_HEX8(0x05, commandOf(bus->sent.back()));
+    TEST_ASSERT_EQUAL_HEX8(2, bus->sent.back().data[4]);
+    ctrl.toggleLocoDirection(0x4005);
+    TEST_ASSERT_EQUAL_HEX8(3, bus->sent.back().data[4]);
+}
+
+void test_command_parser()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 10);
+    bus->onSend = [](const CanFrame &f) {
+        CanFrame a = f;
+        a.id |= (1UL << 16);
+        bus->rx.push_back(a); // Gleisbox echo
+    };
+    CommandParser parser(ctrl);
+    Print out;
+
+    TEST_ASSERT_TRUE(parser.execute("speed 0x4007 300", &out));
+    const CanFrame &f = bus->sent.back();
+    TEST_ASSERT_EQUAL_HEX8(0x04, commandOf(f));
+    const uint8_t speed[6] = {0, 0, 0x40, 0x07, 0x01, 0x2C};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(speed, f.data, 6);
+    TEST_ASSERT_EQUAL_STRING("ok\n", out.out.c_str());
+
+    // Old formats still work, with any spacing and case.
+    TEST_ASSERT_TRUE(parser.execute("speed 16391 100"));
+    TEST_ASSERT_TRUE(parser.execute("  FUNCTION   16391 10 1\r"));
+    TEST_ASSERT_EQUAL_HEX8(10, bus->sent.back().data[4]); // function 10 (was limited to 0..9)
+    TEST_ASSERT_TRUE(parser.execute("accessory 12289 1 1"));
+    TEST_ASSERT_TRUE(parser.execute("direction 16391 3"));
+    TEST_ASSERT_TRUE(parser.execute("power 1"));
+
+    out.out.clear();
+    TEST_ASSERT_FALSE(parser.execute("speed 16391", &out));
+    TEST_ASSERT_EQUAL_STRING("error: usage: speed ADDR SPEED(0..1000)\n", out.out.c_str());
+    out.out.clear();
+    TEST_ASSERT_FALSE(parser.execute("fly 1", &out));
+    TEST_ASSERT_EQUAL_STRING("error: unknown command (type help)\n", out.out.c_str());
+    TEST_ASSERT_FALSE(parser.execute("speed abc 1"));
+    TEST_ASSERT_FALSE(parser.execute("power 2"));
+    TEST_ASSERT_FALSE(parser.execute(""));
+    std::string longLine(100, 'x');
+    TEST_ASSERT_FALSE(parser.execute(longLine.c_str()));
+}
+
+void test_command_parser_reports_no_answer()
+{
+    TrackController ctrl(*bus, 0xDF24, false, 10); // nobody answers
+    CommandParser parser(ctrl);
+    Print out;
+    TEST_ASSERT_FALSE(parser.execute("speed 16391 100", &out));
+    TEST_ASSERT_EQUAL_STRING("error: no answer from the layout\n", out.out.c_str());
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -290,5 +441,12 @@ int main()
     RUN_TEST(test_accessory_returns_the_real_result);
     RUN_TEST(test_accessory_command_line_reads_the_power);
     RUN_TEST(test_s88_with_32_modules);
+    RUN_TEST(test_message_builder_and_uid);
+    RUN_TEST(test_poll_passes_ms2_commands_to_the_handler);
+    RUN_TEST(test_messages_received_while_waiting_are_not_lost);
+    RUN_TEST(test_log_goes_to_the_chosen_output);
+    RUN_TEST(test_direction_enum);
+    RUN_TEST(test_command_parser);
+    RUN_TEST(test_command_parser_reports_no_answer);
     return UNITY_END();
 }

@@ -1,6 +1,23 @@
 # Changelog
 
-## 0.11.0 — unreleased (phase 3: CAN drivers, tests, CI)
+## 0.12.0 — unreleased (phase 4: modern API)
+
+### Added
+- `MarklinProtocol.h`: protocol constants in the `Marklin` namespace (`Cmd::Speed`, `SysCmd::Go`, `Addr::MFX`, `Direction::Toggle`...). The `Config.h` macros stay for existing sketches.
+- `TrackMessage::make()`, `makeSystem()`, `uid()` / `setUid()` (32 bit), `canId()` / `setCanId()`.
+- `TrackController::onMessage()` and `poll()`: messages from the MS2, feedback events, pings are passed to a handler instead of being dropped, including those received while waiting for an answer.
+- `TrackController::setLog(Print*)`: traces to any output (Serial1, TCP...).
+- `setLocoDirection(address, Marklin::Direction)`.
+- `CommandParser`: text commands with free spacing, hexadecimal addresses (`0x4007`), functions up to 31, `turnout`, `halt`, `version`, `help`, and "ok" / "error: ..." answers.
+- Example `Monitor`: prints and decodes the MS2 commands, e.g. to read the current address of a locomotive.
+
+### Changed
+- Addresses are `uint32_t` (Loc-ID or MFX UID); existing calls are unchanged.
+- No bare command bytes and no direct `Serial` output left in `TrackController`: traces go to the log (Serial in debug mode). Errors are only printed when a log is set; `begin()` still returns false.
+- `handleUserCommands()` uses `CommandParser`; `SerialCommand` answers "ok" / "error".
+- Getters accept `nullptr` outputs.
+
+## 0.11.0 — 2026-10-12 (phase 3: CAN drivers, tests, CI)
 
 ### Added
 - `CanDriver` interface (`src/CanDriver.h`) with two drivers: `Esp32TwaiDriver` (ESP32 built-in controller, ACAN_ESP32) and `Mcp2515Driver` (MCP2515 on SPI, ACAN2515), which now also works on ESP32.

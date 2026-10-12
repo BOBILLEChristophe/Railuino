@@ -1,6 +1,6 @@
 {
   "name": "Railuino",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Control a Märklin layout through its CAN bus (Gleisbox, MS2, CS2) from an ESP32 or an Arduino with an MCP2515. Based on Railuino 0.9 by Joerg Pleumann.",
   "keywords": "marklin, maerklin, can, gleisbox, ms2, cs2, mfx, mm2, dcc, s88, model railway",
   "repository": {

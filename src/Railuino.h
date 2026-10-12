@@ -31,19 +31,21 @@
 #include <Arduino.h>
 
 #include "Config.h"
+#include "MarklinProtocol.h"
 #include "CanDriver.h"
 #include "Esp32TwaiDriver.h"
 #include "Mcp2515Driver.h"
 #include "TrackMessage.h"
 #include "TrackController.h"
 #include "TrackReporterS88.h"
+#include "CommandParser.h"
 
 /**
  * Library version, kept in sync with library.properties and library.json.
  */
 #define RAILUINO_VERSION_MAJOR 0
-#define RAILUINO_VERSION_MINOR 11
+#define RAILUINO_VERSION_MINOR 12
 #define RAILUINO_VERSION_PATCH 0
-#define RAILUINO_VERSION_STRING "0.11.0"
+#define RAILUINO_VERSION_STRING "0.12.0"
 
 #endif // RAILUINO_H

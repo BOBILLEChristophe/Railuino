@@ -88,7 +88,13 @@ public:
     size_t print(const String &x) { return print(x.c_str()); }
     size_t print(const __FlashStringHelper *f) { return print(reinterpret_cast<const char *>(f)); }
     size_t print(char c) { out += c; return 1; }
-    size_t print(unsigned long v, int base = DEC) { return print(String(v, base)); }
+    // Like Arduino: Print uses upper case hexadecimal, String lower case.
+    size_t print(unsigned long v, int base = DEC)
+    {
+        char buf[34];
+        snprintf(buf, sizeof buf, base == 16 ? "%lX" : "%lu", v);
+        return print(buf);
+    }
     size_t print(long v, int base = DEC) { return v < 0 ? print("-") + print((unsigned long)-v, base) : print((unsigned long)v, base); }
     size_t print(int v, int base = DEC) { return print((long)v, base); }
     size_t print(unsigned int v, int base = DEC) { return print((unsigned long)v, base); }
@@ -102,6 +108,13 @@ public:
     void begin(unsigned long) {}
     explicit operator bool() const { return true; }
     int available() const { return (int)in.size(); }
+    int read()
+    {
+        if (in.empty()) return -1;
+        int c = (unsigned char)in[0];
+        in.erase(0, 1);
+        return c;
+    }
     String readStringUntil(char c) {
         size_t p = in.find(c);
         String r(in.substr(0, p));
