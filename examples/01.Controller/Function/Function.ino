@@ -2,7 +2,7 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
- * Copyright (C) 2024 Christophe Bobille
+ * Copyright (C) 2024 christophe bobille
  *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
@@ -16,67 +16,58 @@
  */
 
 /*
- * This exemple is the update of examples/01.Controller/Function/Function_new.ino
+ * Switches functions 0 to 12 of a locomotive on and off, one by one.
+ * Active puis désactive une à une les fonctions 0 à 12 d'une locomotive.
  */
 
- #include "Config.h"
- #include "TrackController.h"
- 
- const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
- 
- const uint16_t PAUSE = 5UL * 1000UL;
- 
- const bool DEBUG = false;
- const uint64_t TIMEOUT = 500; // ms
- const uint16_t HASH = 0x00;
- const bool LOOPBACK = false;
- 
- TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
- 
- void setup()
- {
-   Serial.begin(115200);
-   while (!Serial)
-     ;
- 
-   ctrl.begin();
-   Serial.println("Power on");
-   ctrl.setPower(true);
- 
-   byte b;
- 
-   for (uint8_t i = 0; i <= 12; i++)
-   {
-     // Serial.print("Function ");
-     // Serial.print(i, DEC);
- 
-     ctrl.setLocoFunction(LOCO, i, 1);
-     if (ctrl.getLocoFunction(LOCO, i, &b))
-     {
-       Serial.print("Function ");
-       Serial.print(i, DEC);
-       Serial.println(b ? " is on" : " is off");
-     }
- 
-     delay(PAUSE);
- 
-     ctrl.setLocoFunction(LOCO, i, 0);
-     if (ctrl.getLocoFunction(LOCO, i, &b))
-     {
-       Serial.print("Function ");
-       Serial.print(i, DEC);
-       Serial.println(b ? " is on" : " is off");
-     }
- 
-     delay(PAUSE);
-   }
- 
-   Serial.println("Power off");
-   ctrl.setPower(false);
- 
-   Serial.println("System stopped. Need to reset.");
- }
- 
- void loop()
- {
- } // Nothing to do
+#include <Railuino.h>
+
+// CAN pins on ESP32. Ignored on Uno/Mega, where the MCP2515 is on the SPI
+// bus (see RAILUINO_MCP2515_* to change its CS/INT pins and quartz).
+// Broches CAN sur ESP32. Ignorées sur Uno/Mega (MCP2515 sur le bus SPI).
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
+
+const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+const uint32_t PAUSE = 5000;        // ms
+const bool DEBUG = false;
+
+TrackController ctrl(0, DEBUG);
+
+void setFunction(uint8_t function, uint8_t power)
+{
+  ctrl.setLocoFunction(LOCO, function, power);
+  uint8_t b;
+  if (ctrl.getLocoFunction(LOCO, function, &b))
+  {
+    Serial.print(F("Function "));
+    Serial.print(function);
+    Serial.println(b ? F(" is on") : F(" is off"));
+  }
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+  ctrl.begin(CAN_RX, CAN_TX);
+  Serial.println(F("Power on"));
+  ctrl.setPower(true);
+
+  for (uint8_t i = 0; i <= 12; i++)
+  {
+    setFunction(i, 1);
+    delay(PAUSE);
+    setFunction(i, 0);
+    delay(PAUSE);
+  }
+
+  Serial.println(F("Power off"));
+  ctrl.setPower(false);
+  Serial.println(F("System stopped. Need to reset."));
+}
+
+void loop()
+{
+}

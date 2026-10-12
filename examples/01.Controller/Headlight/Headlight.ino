@@ -2,8 +2,8 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
- * Copyright (C) 2024 Christophe Bobille
- * 
+ * Copyright (C) 2024 christophe bobille
+ *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
  * version 1.0, as published by the Creative Commons Organisation.
@@ -14,52 +14,51 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
  */
- 
- /*
- * This exemple is the update of examples/01.Controller/Headlight/Headlight_new.ino
+
+/*
+ * Switches the headlights of a locomotive on and off every 5 seconds.
+ * Allume et éteint les feux d'une locomotive toutes les 5 secondes.
  */
 
- #include "Config.h"
- #include "TrackController.h"
- 
- const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
- 
- const uint16_t PAUSE = 5UL * 1000UL;
- 
- const bool DEBUG = false;
- const uint64_t TIMEOUT = 500; // ms
- const uint16_t HASH = 0x00;
- const bool LOOPBACK = false;
- 
- TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
- 
- void setup() {
-   Serial.begin(115200);
-   while (!Serial);
- 
-   ctrl.begin();
-   Serial.println("Power on");
-   ctrl.setPower(true);
- }
- 
- void loop() {
-   byte b;
-   
-   ctrl.setLocoFunction(LOCO, 0, 1);
-   if (ctrl.getLocoFunction(LOCO, 0, &b)) {
-     Serial.print("Lights are ");
-     Serial.println(b ? "on" : "off");
-   }
-   
-   delay(PAUSE);
-   
-   ctrl.setLocoFunction(LOCO, 0, 0);
-   if (ctrl.getLocoFunction(LOCO, 0, &b)) {
-     Serial.print("Lights are ");
-     Serial.println(b ? "on" : "off");
-   }
-   
-   delay(PAUSE);
- }
- 
- 
+#include <Railuino.h>
+
+// CAN pins on ESP32. Ignored on Uno/Mega, where the MCP2515 is on the SPI
+// bus (see RAILUINO_MCP2515_* to change its CS/INT pins and quartz).
+// Broches CAN sur ESP32. Ignorées sur Uno/Mega (MCP2515 sur le bus SPI).
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
+
+const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+const uint32_t PAUSE = 5000;        // ms
+const bool DEBUG = false;
+
+TrackController ctrl(0, DEBUG);
+
+void setLights(uint8_t power)
+{
+  ctrl.setLocoFunction(LOCO, 0, power);
+  uint8_t b;
+  if (ctrl.getLocoFunction(LOCO, 0, &b))
+  {
+    Serial.print(F("Lights are "));
+    Serial.println(b ? F("on") : F("off"));
+  }
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+  ctrl.begin(CAN_RX, CAN_TX);
+  Serial.println(F("Power on"));
+  ctrl.setPower(true);
+}
+
+void loop()
+{
+  setLights(1);
+  delay(PAUSE);
+  setLights(0);
+  delay(PAUSE);
+}

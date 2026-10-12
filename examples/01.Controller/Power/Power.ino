@@ -2,8 +2,8 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
- * Copyright (C) 2024 Christophe Bobille
- * 
+ * Copyright (C) 2024 christophe bobille
+ *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
  * version 1.0, as published by the Creative Commons Organisation.
@@ -14,36 +14,39 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * LICENSE file for more details.
  */
- 
- /*
- * This exemple is the update of examples/01.Controller/Power/Power.ino
+
+/*
+ * Switches the track power on and off every 5 seconds.
+ * Allume et éteint la voie toutes les 5 secondes.
  */
 
- #include "Config.h"
- #include "TrackController.h"
- 
- const uint16_t PAUSE  = 5000;
- const bool DEBUG = true;
- const uint64_t TIMEOUT = 500; // ms
- const uint16_t HASH = 0x00;
- const bool LOOPBACK = false;
- 
- TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);  // Instance de la classe TrackController, création de l'objet ctrl.
+#include <Railuino.h>
 
- void setup() {
-   Serial.begin(115200);
-   while (!Serial);
-   
-   // ctrl ESP32
-   ctrl.begin(21, 22);              // Lancement du contrôleur
- } 
- 
- void loop() {
-   ctrl.setPower(true);             // Allumage de la centrale
-   delay(PAUSE);
-   
-   ctrl.setPower(false);            // Extinction de la centrale
-   delay(PAUSE);
- }
- 
- 
+// CAN pins on ESP32. Ignored on Uno/Mega, where the MCP2515 is on the SPI
+// bus (see RAILUINO_MCP2515_* to change its CS/INT pins and quartz).
+// Broches CAN sur ESP32. Ignorées sur Uno/Mega (MCP2515 sur le bus SPI).
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
+
+const uint32_t PAUSE = 5000; // ms
+const bool DEBUG = true;
+
+TrackController ctrl(0, DEBUG); // hash 0 = generated
+
+void setup()
+{
+  Serial.begin(115200);
+  while (!Serial)
+    ;
+  ctrl.begin(CAN_RX, CAN_TX);
+}
+
+void loop()
+{
+  Serial.println(F("Power on"));
+  ctrl.setPower(true);
+  delay(PAUSE);
+  Serial.println(F("Power off"));
+  ctrl.setPower(false);
+  delay(PAUSE);
+}

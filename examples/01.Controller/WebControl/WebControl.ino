@@ -1,9 +1,23 @@
+/*
+ * Web interface for the layout (ESP32 only): power, speed, direction,
+ * functions. The pages are in data/: upload them with
+ * PlatformIO > Platform > Upload Filesystem Image.
+ * Interface web du réseau (ESP32 uniquement). Les pages sont dans data/ :
+ * les téléverser avec PlatformIO > Platform > Upload Filesystem Image.
+ */
+
+#ifndef ARDUINO_ARCH_ESP32
+#error "WebControl needs an ESP32 (WiFi) / WebControl nécessite un ESP32 (WiFi)"
+#endif
+
 #include <WiFi.h>
 #include <WebServer.h>
 #include <SPIFFS.h>
-#include "Config.h"
-#include "TrackController.h"
-#include <ACAN_ESP32.h>
+#include <Railuino.h>
+
+// CAN pins / Broches CAN
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
 
 bool powerState = false; // Variable globale pour suivre l'état de l'alimentation
 
@@ -11,17 +25,19 @@ byte cBuffer[13];
 byte sBuffer[13];
 
 const bool DEBUG = true;
-const uint64_t TIMEOUT = 500; // ms
+const uint32_t TIMEOUT = 500; // ms
 const uint16_t HASH = 0xDF24;
 const bool LOOPBACK = false;
 
 TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);
-// WiFi credentials live in src/secrets.h, which is ignored by Git.
-// Copy src/secrets.h.example to src/secrets.h and fill it in.
+
+// WiFi credentials live in secrets.h (same folder), ignored by Git.
+// Copy secrets.h.example to secrets.h and fill it in.
+// Identifiants WiFi dans secrets.h (même dossier), ignoré par Git.
 #if __has_include("secrets.h")
 #include "secrets.h"
 #else
-#error "Copiez src/secrets.h.example en src/secrets.h et renseignez votre WiFi / Copy src/secrets.h.example to src/secrets.h"
+#error "Copiez secrets.h.example en secrets.h (dossier WebControl) et renseignez votre WiFi / Copy secrets.h.example to secrets.h"
 #endif
 const char *ssid = WIFI_SSID;
 const char *password = WIFI_PASSWORD;
@@ -273,7 +289,7 @@ void setup()
   server.onNotFound(handleNotFound);
 
   server.begin();
-  ctrl.begin();
+  ctrl.begin(CAN_RX, CAN_TX);
 }
 
 void loop()

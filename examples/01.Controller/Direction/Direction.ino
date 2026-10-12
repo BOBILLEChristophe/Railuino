@@ -2,7 +2,7 @@
  * Railuino - Hacking your Märklin
  *
  * Copyright (C) 2012 Joerg Pleumann
- * Copyright (C) 2024 Christophe Bobille
+ * Copyright (C) 2024 christophe bobille
  *
  * This example is free software; you can redistribute it and/or
  * modify it under the terms of the Creative Commons Zero License,
@@ -16,56 +16,52 @@
  */
 
 /*
- * This exemple is the update of examples/01.Controller/Direction/Direction.ino
+ * Changes the direction of a locomotive every 10 seconds.
+ * Change le sens de marche d'une locomotive toutes les 10 secondes.
  */
 
-#include "Config.h"
-#include "TrackController.h"
+#include <Railuino.h>
+
+// CAN pins on ESP32. Ignored on Uno/Mega, where the MCP2515 is on the SPI
+// bus (see RAILUINO_MCP2515_* to change its CS/INT pins and quartz).
+// Broches CAN sur ESP32. Ignorées sur Uno/Mega (MCP2515 sur le bus SPI).
+const uint8_t CAN_RX = 22;
+const uint8_t CAN_TX = 23;
 
 const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+const uint32_t PAUSE = 10000;       // ms
+const bool DEBUG = false;
 
-const uint16_t PAUSE = 10UL * 1000UL;
+TrackController ctrl(0, DEBUG);
 
-const bool DEBUG = true;
-const uint64_t TIMEOUT = 500; // ms
-const uint16_t HASH = 0x00;
-const bool LOOPBACK = false;
-
-TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK); // Instance de la classe TrackController, création de l'objet ctrl.
+void printDirection()
+{
+  uint8_t direction;
+  if (ctrl.getLocoDirection(LOCO, &direction))
+  {
+    Serial.print(F("Direction is "));
+    Serial.println(direction == DIR_FORWARD ? F("forward") : F("reverse"));
+  }
+}
 
 void setup()
 {
   Serial.begin(115200);
   while (!Serial)
     ;
-
-  // ctrl ESP32
-  ctrl.begin(21, 22); // Lancement du contrôleur
-  Serial.println("Power on");
+  ctrl.begin(CAN_RX, CAN_TX);
+  Serial.println(F("Power on"));
   ctrl.setPower(true);
-  Serial.println("Headlights on");
+  Serial.println(F("Headlights on"));
   ctrl.setLocoFunction(LOCO, 0, 1);
 }
 
 void loop()
 {
-  byte b;
-
   ctrl.setLocoDirection(LOCO, DIR_FORWARD);
-  if (ctrl.getLocoDirection(LOCO, &b))
-  {
-    Serial.print("Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
-  }
-
+  printDirection();
   delay(PAUSE);
-
   ctrl.setLocoDirection(LOCO, DIR_REVERSE);
-  if (ctrl.getLocoDirection(LOCO, &b))
-  {
-    Serial.print("Direction is ");
-    Serial.println(b == DIR_FORWARD ? "forward" : "reverse");
-  }
-
+  printDirection();
   delay(PAUSE);
 }
