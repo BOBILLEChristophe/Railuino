@@ -159,9 +159,22 @@ public:
   void onChange(ChangeHandler handler, void *context = nullptr);
 
   /**
-   * First SID given in master mode (default 5, as v0.4).
+   * MFX SIDs: 1 .. MAX_SID (Loc-ID 0x4001 .. 0x7FFF).
    */
-  void setFirstSid(uint16_t sid) { mFirstSid = sid; }
+  static const uint16_t MAX_SID = 0x3FFF;
+  static bool isValidSid(uint16_t sid) { return sid >= 1 && sid <= MAX_SID; }
+
+  /**
+   * First SID given in master mode (default 5, as v0.4). false (and no
+   * change) if the SID is not valid.
+   */
+  bool setFirstSid(uint16_t sid)
+  {
+    if (!isValidSid(sid))
+      return false;
+    mFirstSid = sid;
+    return true;
+  }
 
   /**
    * Keeps the confirmed entries in non volatile memory.

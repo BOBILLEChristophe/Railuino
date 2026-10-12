@@ -145,7 +145,7 @@ bool MfxRegistry::sidUsed(uint16_t sid, const Entry *except) const
 uint16_t MfxRegistry::nextFreeSid() const
 {
   uint16_t sid = mFirstSid;
-  while (sidUsed(sid, nullptr) && sid < 0x3FFF)
+  while (sidUsed(sid, nullptr) && sid < MAX_SID)
     sid++;
   return sid;
 }
@@ -170,7 +170,7 @@ uint32_t MfxRegistry::uidOf(uint16_t locIdOrSid) const
 bool MfxRegistry::assign(uint32_t uid, uint16_t locIdOrSid)
 {
   const uint16_t sid = locIdOrSid >= Addr::MFX && locIdOrSid < Addr::SX2 ? locIdOrSid - Addr::MFX : locIdOrSid;
-  if (uid == 0 || sid == 0)
+  if (uid == 0 || !isValidSid(sid))
     return false;
   learn(uid, sid);
   return locIdOf(uid) == Addr::MFX + sid;
@@ -275,7 +275,7 @@ void MfxRegistry::confirmed(Entry &e)
 // A central station (the MS2, or us) bound 'uid' to 'sid'.
 void MfxRegistry::learn(uint32_t uid, uint16_t sid)
 {
-  if (uid == 0 || sid == 0)
+  if (uid == 0 || !isValidSid(sid))
     return;
 
   Entry *e = find(uid);
@@ -496,6 +496,8 @@ bool MfxRegistry::load()
     return false;
   for (uint8_t i = 0; i < n; i++)
   {
+    if (table[i].uid == 0 || !isValidSid(table[i].sid))
+      continue; // damaged entry
     Entry *e = find(table[i].uid);
     if (e == nullptr)
       e = freeSlot();
@@ -554,6 +556,8 @@ bool MfxRegistry::load()
     Stored s;
     EEPROM.get(address, s);
     address += sizeof(s);
+    if (s.uid == 0 || !isValidSid(s.sid))
+      continue; // damaged entry
     Entry *e = find(s.uid);
     if (e == nullptr)
       e = freeSlot();

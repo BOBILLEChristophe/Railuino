@@ -9,6 +9,16 @@
 - `MfxRegistry::assign(uid, address)`: records a known UID -> address pair (Loc-ID or SID); a later Bind of the MS2 replaces it.
 - WebControl: locomotives can be given by their MFX UID (`data-uid` in `index.html`); the sketch follows the addresses given by the MS2 with an `MfxRegistry` (kept in NVS) and uses `data-address` until the UID is known. `GET /locos` returns the table as JSON. Answers give the address used.
 
+### Fixed (review of the 12 October 2026 audit)
+- Answers are matched more strictly: same function number (Function), same CV number (Read/WriteConfig), same position (Accessory), and long enough for the values read (a 5-byte speed answer is refused). Before, the answer to an MS2 command on F1 could be taken for our request on F0 of the same loco.
+- Received frames longer than 8 bytes (custom driver) are cut to 8.
+- Accessory switch-off: tried 3 times, 50 ms apart, before giving up (blocking and non-blocking modes); before, a lost acknowledgement left the switch-off unconfirmed.
+- `setTurnoutPulse(ms)`: pulse length of `setTurnout()` (default 1000 ms, as before).
+- Command lines (`CommandParser`, `handleUserCommands`): numbers are decimal, or hexadecimal with `0x`; "0300" is 300 (it was read as octal, 192); signs and values beyond 32 bits are refused; speed limited to 1000, as the help says.
+- `MfxRegistry`: SIDs checked (1 .. 0x3FFF) in `assign()`, `setFirstSid()` (now returns bool), the Bind messages and the stored table.
+- WebControl: the power button changes only when the layout confirms (it was toggled before, and could get out of step), follows Stop / Go of the MS2 (`GET /power`, checked every 3 s by the page), errors answered with HTTP 503; commands answer 503 if the CAN bus did not start; the WiFi wait is limited to 20 s, then retried in the background.
+- README: the first program checks the results; TcpCommand and WebControl have no password (local network only).
+
 ### Changed
 - `exchangeMessage()` also checks the UID of the answers to MFX Bind and Verify.
 - TcpCommand no longer blocks in `loop()` while waiting for a client, and calls `poll()`. TcpCommand, SerialCommand and DesktopStation use non-blocking accessories.

@@ -115,12 +115,15 @@ private:
     uint32_t address;
     uint32_t dueMs;
     uint8_t position;
+    uint8_t tries; // switch-off attempts not acknowledged
     bool used;
   };
   PendingAccessory mPendingAcc[MAX_PENDING_ACC];
   bool mAccAsync;
+  uint16_t mTurnoutPulseMs;
 
   bool switchAccessoryOff(const uint32_t address, uint8_t position);
+  bool switchAccessoryOffWithRetries(const uint32_t address, uint8_t position);
   void serviceAccessories(bool all);
 
   void logFrame(const char *direction, const CanFrame &frame);
@@ -456,6 +459,21 @@ public:
    * successful.
    */
   bool setTurnout(const uint32_t address, bool straight);
+
+  /**
+   * Pulse length (ms) used by setTurnout(). Default 1000 ms, as in
+   * Railuino 0.9; Märklin central stations use about 200 ms. Too short,
+   * the turnout may not switch; too long, the coil heats.
+   */
+  void setTurnoutPulse(uint16_t ms) { mTurnoutPulseMs = ms; }
+  uint16_t getTurnoutPulse() const { return mTurnoutPulseMs; }
+
+  /**
+   * Switch-off attempts for an accessory before giving up (the log
+   * then reports it). Retries are 50 ms apart.
+   */
+  static const uint8_t ACC_OFF_TRIES = 3;
+  static const uint16_t ACC_OFF_RETRY_MS = 50;
 
   /**
    * Queries the direction of the given locomotive and writes it

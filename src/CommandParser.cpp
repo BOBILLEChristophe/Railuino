@@ -40,15 +40,38 @@ namespace
     return *word == 0 && *name == 0;
   }
 
-  // Decimal or hexadecimal (0x...) number. False if not a number or
-  // greater than 'max'.
+  // Decimal number, or hexadecimal with 0x. No sign, no octal: "0300"
+  // is 300. False if not a number, too large, or greater than 'max'.
   bool parseNumber(const char *word, uint32_t max, uint32_t &value)
   {
     if (word == nullptr || *word == 0)
       return false;
-    char *end = nullptr;
-    const unsigned long v = strtoul(word, &end, 0);
-    if (end == word || *end != 0 || v > max)
+    uint32_t base = 10;
+    if (word[0] == '0' && (word[1] == 'x' || word[1] == 'X'))
+    {
+      base = 16;
+      word += 2;
+      if (*word == 0)
+        return false;
+    }
+    uint32_t v = 0;
+    for (; *word != 0; word++)
+    {
+      const char c = *word;
+      uint32_t digit;
+      if (c >= '0' && c <= '9')
+        digit = c - '0';
+      else if (base == 16 && c >= 'a' && c <= 'f')
+        digit = c - 'a' + 10;
+      else if (base == 16 && c >= 'A' && c <= 'F')
+        digit = c - 'A' + 10;
+      else
+        return false;
+      if (v > (0xFFFFFFFFUL - digit) / base)
+        return false; // more than 32 bits
+      v = v * base + digit;
+    }
+    if (v > max)
       return false;
     value = v;
     return true;
@@ -147,7 +170,7 @@ bool CommandParser::execute(const char *line, Print *out)
   }
   else if (sameWord(cmd, "speed"))
   {
-    if (count != 3 || !parseNumber(words[1], 0xFFFFFFFFUL, a) || !parseNumber(words[2], 1023, b))
+    if (count != 3 || !parseNumber(words[1], 0xFFFFFFFFUL, a) || !parseNumber(words[2], 1000, b))
     {
       report(out, false, F("usage: speed ADDR SPEED(0..1000)"));
       return false;

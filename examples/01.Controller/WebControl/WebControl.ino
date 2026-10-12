@@ -45,7 +45,11 @@
 const uint8_t CAN_RX = 22;
 const uint8_t CAN_TX = 23;
 
-bool powerState = false; // Variable globale pour suivre l'état de l'alimentation
+bool powerState = false; // track power, as confirmed by the layout
+bool canReady = false;   // result of ctrl.begin()
+bool wifiReported = false;
+
+const uint32_t WIFI_TIMEOUT_MS = 20000;
 
 byte cBuffer[13];
 byte sBuffer[13];
@@ -217,27 +221,51 @@ void handleLocos()
   server.send(200, "application/json", json);
 }
 
+// Commands need the CAN bus: answers 503 if it did not start.
+bool canAvailable()
+{
+  if (!canReady)
+    server.send(503, "text/plain", "CAN bus not started (see the serial monitor)");
+  return canReady;
+}
+
+// Stop / Go sent by the MS2 (or another device): keeps powerState right.
+void onCanMessage(const TrackMessage &m, void *)
+{
+  if (m.command == Marklin::Cmd::System && m.length >= 5)
+  {
+    if (m.data[4] == Marklin::SysCmd::Stop)
+      powerState = false;
+    else if (m.data[4] == Marklin::SysCmd::Go)
+      powerState = true;
+  }
+}
+
+// GET /power: "true" or "false", for the page.
+void handlePower()
+{
+  server.send(200, "text/plain", powerState ? "true" : "false");
+}
+
+// Toggles the power. powerState only changes when the layout confirms.
 void handleSetPower()
 {
-  auto togglePower = [&]() -> bool
+  if (!canAvailable())
+    return;
+  const bool wanted = !powerState;
+  if (ctrl.setPower(wanted))
   {
-    powerState = !powerState;
-    return ctrl.setPower(powerState);
-  };
-
-  if (togglePower())
-  {
-    if (powerState)
-      server.send(200, "text/plain", "true");
-    else
-      server.send(200, "text/plain", "false");
+    powerState = wanted;
+    server.send(200, "text/plain", powerState ? "true" : "false");
   }
   else
-    server.send(200, "text/plain", "Error power function");
+    server.send(503, "text/plain", "No answer from the layout");
 }
 
 void handleSetStop()
 {
+  if (!canAvailable())
+    return;
   const uint16_t address = requestAddress();
   if (address == 0)
   {
@@ -249,11 +277,15 @@ void handleSetStop()
 
 void handleSetSystemHalt()
 {
+  if (!canAvailable())
+    return;
   sendResult(ctrl.systemHalt(0), "SystemHalt", 0);
 }
 
 void handleSetDirection()
 {
+  if (!canAvailable())
+    return;
   const uint16_t address = requestAddress();
   if (address == 0)
   {
@@ -265,6 +297,8 @@ void handleSetDirection()
 
 void handleSetSpeed()
 {
+  if (!canAvailable())
+    return;
   const uint16_t address = requestAddress();
   if (address == 0 || !server.hasArg("speed"))
   {
@@ -288,6 +322,8 @@ void handleSetAddress()
 
 void handleSetFunction()
 {
+  if (!canAvailable())
+    return;
   const uint16_t address = requestAddress();
   if (address == 0 || !server.hasArg("function") || !server.hasArg("power"))
   {
@@ -301,6 +337,8 @@ void handleSetFunction()
 
 void handleSetTurnout()
 {
+  if (!canAvailable())
+    return;
   if (!server.hasArg("address") || !server.hasArg("straight"))
   {
     server.send(400, "text/plain", "Turnout parameter missing");
@@ -326,16 +364,31 @@ void setup()
     return;
   }
 
+  // CAN first: the page reports it if the bus did not start.
+  canReady = ctrl.begin(CAN_RX, CAN_TX);
+  if (canReady)
+  {
+    ctrl.setAccessoryAsync(true); // turnouts: switch-off sent by poll()
+    ctrl.onMessage(onCanMessage); // Stop / Go from the MS2
+    mfx.setAutoSave(true);        // the table survives a restart
+    mfx.begin();                  // observer: learns the addresses given by the MS2
+    mfx.printTo(Serial);
+  }
+  else
+    Serial.println(F("!!! CAN bus not started: check the wiring and CAN_RX / CAN_TX"));
+
+  // WiFi: waits WIFI_TIMEOUT_MS at most, then keeps trying in the
+  // background (the address is printed when connected).
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
+  const uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS)
   {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("");
-  Serial.println("WiFi connected.");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println();
+  if (WiFi.status() != WL_CONNECTED)
+    Serial.println(F("!!! WiFi not connected yet (check secrets.h); still trying"));
 
   server.on("/", handleRoot);
   server.on("/style.css", handleCss);
@@ -355,19 +408,21 @@ void setup()
   server.on("/setFunction", HTTP_POST, handleSetFunction);
   server.on("/setTurnout", HTTP_POST, handleSetTurnout);
   server.on("/locos", HTTP_GET, handleLocos);
+  server.on("/power", HTTP_GET, handlePower);
   server.onNotFound(handleNotFound);
 
   server.begin();
-  ctrl.begin(CAN_RX, CAN_TX);
-  ctrl.setAccessoryAsync(true); // turnouts: switch-off sent by poll()
-
-  mfx.setAutoSave(true); // the table survives a restart
-  mfx.begin();           // observer: learns the addresses given by the MS2
-  mfx.printTo(Serial);
 }
 
 void loop()
 {
+  if (!wifiReported && WiFi.status() == WL_CONNECTED)
+  {
+    wifiReported = true;
+    Serial.print(F("WiFi connected. IP address: "));
+    Serial.println(WiFi.localIP());
+  }
   server.handleClient();
-  ctrl.poll(); // MS2 messages -> MFX table, turnout switch-offs
+  if (canReady)
+    ctrl.poll(); // MS2 messages -> MFX table, Stop / Go, turnout switch-offs
 }
