@@ -35,6 +35,7 @@
       ".pio",
       ".github",
       "extras/reference",
+      "extras/images",
       "test",
       "platformio.ini",
       "*.tar.gz",

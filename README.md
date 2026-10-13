@@ -3,6 +3,10 @@
 Bibliothèque Arduino / PlatformIO pour piloter un réseau Märklin par son bus CAN (Gleisbox, MS2, CS2) depuis un **ESP32** ou un **Arduino Uno / Mega avec un MCP2515**.
 Réécriture de la version 0.9 de la bibliothèque [Railuino](https://code.google.com/archive/p/railuino/) de Joerg Pleumann.
 
+![Montage complet : carte ESP32, Gleisbox, Mobile Station 2 et locomotive sur la voie](extras/images/montage.jpg)
+
+*Railuino sur un ESP32 (à gauche), relié au bus CAN de la Gleisbox Märklin. La Mobile Station 2 reste branchée : les deux pilotent la même locomotive.*
+
 *English below.*
 
 Vidéo : https://youtu.be/x5fVPsChlIA
@@ -16,6 +20,10 @@ Vidéo : https://youtu.be/x5fVPsChlIA
 - Rétrosignalisation S88
 
 ## Cartes prises en charge
+
+![Carte ESP32 avec transceiver CAN MCP2562, raccordée à la Gleisbox](extras/images/carte-esp32.jpg)
+
+*La carte de test, dessinée par Christophe Bobille pour [Locoduino](https://www.locoduino.org) : un ESP32 DevKit, un transceiver CAN MCP2562 et un régulateur d'alimentation. Le bus CAN arrive sur le bornier vert (fils orange et vert).*
 
 | Carte | Contrôleur CAN | Pilote Railuino | Bibliothèque CAN |
 | --- | --- | --- | --- |
