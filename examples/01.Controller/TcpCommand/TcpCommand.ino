@@ -29,10 +29,10 @@
 #include <Railuino.h>
 
 // CAN pins / Broches CAN
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
 
-const bool DEBUG = true;
+constexpr bool DEBUG = true;
 
 TrackController ctrl(0xDF24, DEBUG);
 
@@ -43,13 +43,13 @@ TrackController ctrl(0xDF24, DEBUG);
 #else
 #error "Copiez secrets.h.example en secrets.h et renseignez votre WiFi / Copy secrets.h.example to secrets.h"
 #endif
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASSWORD;
+constexpr char ssid[] = WIFI_SSID;
+constexpr char password[] = WIFI_PASSWORD;
 
 IPAddress ip(192, 168, 1, 103);
 IPAddress gateway(192, 168, 1, 254);
 IPAddress subnet(255, 255, 255, 0);
-const uint port = 15731;
+constexpr uint16_t port = 15731;
 WiFiServer server(port);
 WiFiClient client;
 

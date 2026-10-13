@@ -58,15 +58,22 @@ Les dépendances (ACAN_ESP32 ou ACAN2515) sont installées automatiquement. Pour
 ```cpp
 #include <Railuino.h>
 
-const uint8_t CAN_RX = 22; // ESP32 uniquement, ignoré sur Uno/Mega
-const uint8_t CAN_TX = 23;
-const uint16_t LOCO = ADDR_MFX + 7;
+#if defined(ARDUINO_ARCH_ESP32)
+constexpr uint8_t CAN_RX = 22;   // TWAI de l'ESP32
+constexpr uint8_t CAN_TX = 23;
+#endif
+constexpr uint16_t LOCO = ADDR_MFX + 7;
 
 TrackController ctrl(0xDF24); // hash ; 0 = généré automatiquement
 
 void setup() {
   Serial.begin(115200);
-  if (!ctrl.begin(CAN_RX, CAN_TX)) {   // câblage, broches, quartz du MCP2515
+#if defined(ARDUINO_ARCH_ESP32)
+  const bool canOk = ctrl.begin(CAN_RX, CAN_TX);
+#else
+  const bool canOk = ctrl.begin();     // MCP2515 : SPI, CS 10, INT 2
+#endif
+  if (!canOk) {                        // câblage, broches, quartz du MCP2515
     Serial.println("Bus CAN non démarré");
     return;
   }

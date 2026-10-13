@@ -42,22 +42,22 @@
 #include <Railuino.h>
 
 // CAN pins / Broches CAN
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
 
 bool powerState = false; // track power, as confirmed by the layout
 bool canReady = false;   // result of ctrl.begin()
 bool wifiReported = false;
 
-const uint32_t WIFI_TIMEOUT_MS = 20000;
+constexpr uint32_t WIFI_TIMEOUT_MS = 20000;
 
 byte cBuffer[13];
 byte sBuffer[13];
 
-const bool DEBUG = true;
-const uint32_t TIMEOUT = 500; // ms
-const uint16_t HASH = 0xDF24;
-const bool LOOPBACK = false;
+constexpr bool DEBUG = true;
+constexpr uint32_t TIMEOUT = 500; // ms
+constexpr uint16_t HASH = 0xDF24;
+constexpr bool LOOPBACK = false;
 
 TrackController ctrl(HASH, DEBUG, TIMEOUT, LOOPBACK);
 
@@ -72,13 +72,13 @@ MfxRegistry mfx(ctrl);
 #else
 #error "Copiez secrets.h.example en secrets.h (dossier WebControl) et renseignez votre WiFi / Copy secrets.h.example to secrets.h"
 #endif
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASSWORD;
+constexpr char ssid[] = WIFI_SSID;
+constexpr char password[] = WIFI_PASSWORD;
 
 IPAddress ip(192, 168, 1, 103);
 IPAddress gateway(192, 168, 1, 254);
 IPAddress subnet(255, 255, 255, 0);
-const uint port = 80;
+constexpr uint16_t port = 80;
 
 WebServer server(port);
 

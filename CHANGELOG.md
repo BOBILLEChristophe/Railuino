@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Examples: the ESP32 CAN pins (`CAN_RX`, `CAN_TX`) are declared and used only on ESP32 (`#if defined(ARDUINO_ARCH_ESP32)`); Uno and Mega call `ctrl.begin()` (MCP2515 on the SPI bus). Before, the pins were passed and silently ignored on AVR. Constants are `constexpr`.
+
 ## 0.14.0 — 2026-10-12 (first published release)
 
 ### Added
