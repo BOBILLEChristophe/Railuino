@@ -32,12 +32,19 @@
 
 #include <Railuino.h>
 
-// CAN pins on ESP32. Ignored on Uno/Mega (MCP2515 on the SPI bus).
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+#if defined(ARDUINO_ARCH_ESP32)
+// CAN pins of the ESP32 (TWAI controller).
+// Broches CAN de l'ESP32 (contrôleur TWAI).
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
+#endif
+// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2, 16 MHz quartz
+// (see RAILUINO_MCP2515_* to change them).
+// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2, quartz 16 MHz
+// (voir RAILUINO_MCP2515_* pour les changer).
 
 // UID of one of your MFX locos (printed when the MS2 registers it).
-const uint32_t LOCO_UID = 0xFFE9B194UL;
+constexpr uint32_t LOCO_UID = 0xFFE9B194UL;
 
 TrackController ctrl(0, false);
 MfxRegistry mfx(ctrl); // observer mode: sends nothing
@@ -58,7 +65,11 @@ void setup()
   Serial.begin(115200);
   while (!Serial)
     ;
+#if defined(ARDUINO_ARCH_ESP32)
   ctrl.begin(CAN_RX, CAN_TX);
+#else
+  ctrl.begin(); // MCP2515 (SPI)
+#endif
   mfx.setAutoSave(true); // NVS on ESP32, EEPROM on AVR
   mfx.onChange(onNewAddress);
   mfx.begin();

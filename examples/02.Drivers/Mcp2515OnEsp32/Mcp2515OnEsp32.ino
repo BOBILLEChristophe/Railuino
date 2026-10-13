@@ -33,12 +33,12 @@
 #include <ACAN2515.h> // makes the MCP2515 driver available (Arduino IDE)
 #include <Railuino.h>
 
-const uint8_t MCP2515_CS = 5;
-const uint8_t MCP2515_INT = 4;
-const uint32_t MCP2515_QUARTZ = 8000000UL; // 8 MHz on most cheap modules
+constexpr uint8_t MCP2515_CS = 5;
+constexpr uint8_t MCP2515_INT = 4;
+constexpr uint32_t MCP2515_QUARTZ = 8000000UL; // 8 MHz on most cheap modules
 
-const uint32_t PAUSE = 5000; // ms
-const bool DEBUG = true;
+constexpr uint32_t PAUSE = 5000; // ms
+constexpr bool DEBUG = true;
 
 Mcp2515Driver can(MCP2515_CS, MCP2515_INT, MCP2515_QUARTZ);
 TrackController ctrl(can, 0, DEBUG); // hash 0 = generated

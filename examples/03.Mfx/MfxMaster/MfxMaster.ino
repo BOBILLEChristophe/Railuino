@@ -30,11 +30,18 @@
 
 #include <Railuino.h>
 
-// CAN pins on ESP32. Ignored on Uno/Mega (MCP2515 on the SPI bus).
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+#if defined(ARDUINO_ARCH_ESP32)
+// CAN pins of the ESP32 (TWAI controller).
+// Broches CAN de l'ESP32 (contrôleur TWAI).
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
+#endif
+// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2, 16 MHz quartz
+// (see RAILUINO_MCP2515_* to change them).
+// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2, quartz 16 MHz
+// (voir RAILUINO_MCP2515_* pour les changer).
 
-const bool DEBUG = false;
+constexpr bool DEBUG = false;
 
 TrackController ctrl(0x2F39, DEBUG); // hash of v0.4
 MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
@@ -55,7 +62,12 @@ void setup()
   Serial.begin(115200);
   while (!Serial)
     ;
-  if (!ctrl.begin(CAN_RX, CAN_TX))
+#if defined(ARDUINO_ARCH_ESP32)
+  const bool canOk = ctrl.begin(CAN_RX, CAN_TX);
+#else
+  const bool canOk = ctrl.begin(); // MCP2515 (SPI)
+#endif
+  if (!canOk)
   {
     Serial.println(F("CAN configuration error"));
     for (;;)

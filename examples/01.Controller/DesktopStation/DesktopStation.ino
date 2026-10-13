@@ -34,26 +34,33 @@
 
 #include <Railuino.h>
 
-// CAN pins on ESP32 (ignored on Uno/Mega: MCP2515 on the SPI bus).
+#if defined(ARDUINO_ARCH_ESP32)
+// CAN pins of the ESP32 (TWAI controller).
+// Broches CAN de l'ESP32 (contrôleur TWAI).
 // Uwe Monreal's board used Rx 19 / Tx 22.
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
+#endif
+// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2, 16 MHz quartz
+// (see RAILUINO_MCP2515_* to change them).
+// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2, quartz 16 MHz
+// (voir RAILUINO_MCP2515_* pour les changer).
 
 // S88 feedback (getS88). Disabled by default: choose pins that are free
 // on your board. Uwe Monreal's ESP32 board used DATA 33, CLOCK 25,
 // LOAD 23, RESET 21 — LOAD 23 conflicts with CAN_TX 23 above.
 #define S88_ENABLED 0
-const uint8_t S88_MODULES = 1; // default number of 16 bit modules
-const uint8_t S88_DATA = 33;
-const uint8_t S88_CLOCK = 25;
-const uint8_t S88_LOAD = 26;
-const uint8_t S88_RESET = 27;
+constexpr uint8_t S88_MODULES = 1; // default number of 16 bit modules
+constexpr uint8_t S88_DATA = 33;
+constexpr uint8_t S88_CLOCK = 25;
+constexpr uint8_t S88_LOAD = 26;
+constexpr uint8_t S88_RESET = 27;
 
-const uint32_t SERIAL_BAUD = 115200;
-const uint32_t EXCHANGE_TIMEOUT_MS = 500;
-const uint32_t LINE_TIMEOUT_MS = 4000; // as the original gateway
-const uint8_t LINE_CAPACITY = 128;
-const uint8_t MAX_ARGS = 8;
+constexpr uint32_t SERIAL_BAUD = 115200;
+constexpr uint32_t EXCHANGE_TIMEOUT_MS = 500;
+constexpr uint32_t LINE_TIMEOUT_MS = 4000; // as the original gateway
+constexpr uint8_t LINE_CAPACITY = 128;
+constexpr uint8_t MAX_ARGS = 8;
 
 TrackController ctrl(0, false, EXCHANGE_TIMEOUT_MS); // hash 0 = generated
 #if S88_ENABLED
@@ -346,7 +353,11 @@ void handleLine()
 void setup()
 {
   Serial.begin(SERIAL_BAUD);
+#if defined(ARDUINO_ARCH_ESP32)
   canReady = ctrl.begin(CAN_RX, CAN_TX);
+#else
+  canReady = ctrl.begin(); // MCP2515 (SPI)
+#endif
   // Turnouts: setTurnout() answers at once, poll() switches the coil off;
   // a route of several turnouts is no longer slowed down by the pulses.
   ctrl.setAccessoryAsync(true);

@@ -22,16 +22,21 @@
 
 #include <Railuino.h>
 
-// CAN pins on ESP32. Ignored on Uno/Mega, where the MCP2515 is on the SPI
-// bus (see RAILUINO_MCP2515_* to change its CS/INT pins and quartz).
-// Broches CAN sur ESP32. Ignorées sur Uno/Mega (MCP2515 sur le bus SPI).
-const uint8_t CAN_RX = 22;
-const uint8_t CAN_TX = 23;
+#if defined(ARDUINO_ARCH_ESP32)
+// CAN pins of the ESP32 (TWAI controller).
+// Broches CAN de l'ESP32 (contrôleur TWAI).
+constexpr uint8_t CAN_RX = 22;
+constexpr uint8_t CAN_TX = 23;
+#endif
+// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2, 16 MHz quartz
+// (see RAILUINO_MCP2515_* to change them).
+// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2, quartz 16 MHz
+// (voir RAILUINO_MCP2515_* pour les changer).
 
-const uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
-const uint16_t SPEED = 100;         // 0..1000
-const uint32_t TIME = 5000;         // ms
-const bool DEBUG = false;
+constexpr uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+constexpr uint16_t SPEED = 100;         // 0..1000
+constexpr uint32_t TIME = 5000;         // ms
+constexpr bool DEBUG = false;
 
 TrackController ctrl(0, DEBUG);
 
@@ -51,7 +56,11 @@ void setup()
   Serial.begin(115200);
   while (!Serial)
     ;
+#if defined(ARDUINO_ARCH_ESP32)
   ctrl.begin(CAN_RX, CAN_TX);
+#else
+  ctrl.begin(); // MCP2515 (SPI)
+#endif
 
   Serial.println(F("Power on"));
   ctrl.setPower(true);
