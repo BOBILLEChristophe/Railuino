@@ -55,10 +55,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # "submit": rules for a first registration in the Library Manager.
-      # Railuino was accepted on 12 October 2026 (arduino/library-registry
-      # #9364): change to "update" once it appears in the index.
+      # "update": Railuino is listed in the Library Manager since
+      # 13 October 2026 (arduino/library-registry #9364).
       - uses: arduino/arduino-lint-action@v2
         with:
-          library-manager: submit
+          library-manager: update
           compliance: strict
