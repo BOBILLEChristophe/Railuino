@@ -28,6 +28,9 @@
  *         c = clear the table.
  */
 
+#if defined(ARDUINO_ARCH_AVR)
+#include <ACAN2515.h> // Uno / Mega: lets the Arduino IDE find the MCP2515 library
+#endif
 #include <Railuino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -36,14 +39,22 @@
 constexpr uint8_t CAN_RX = 22;
 constexpr uint8_t CAN_TX = 23;
 #endif
-// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2, 16 MHz quartz
-// (see RAILUINO_MCP2515_* to change them).
-// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2, quartz 16 MHz
-// (voir RAILUINO_MCP2515_* pour les changer).
+#if defined(ARDUINO_ARCH_AVR)
+// Uno / Mega: MCP2515 module on the SPI bus, CS 10, INT 2. Set the
+// frequency written on its quartz: most cheap modules have 8 MHz.
+// Uno / Mega : module MCP2515 sur le bus SPI, CS 10, INT 2. Indiquez la
+// fréquence écrite sur son quartz : 8 MHz sur la plupart des modules.
+constexpr uint32_t MCP2515_QUARTZ = 16000000UL; // 8000000UL for 8 MHz
+Mcp2515Driver can(10, 2, MCP2515_QUARTZ);       // CS, INT, quartz
+#endif
 
 constexpr bool DEBUG = false;
 
+#if defined(ARDUINO_ARCH_AVR)
+TrackController ctrl(can, 0x2F39, DEBUG); // hash of v0.4
+#else
 TrackController ctrl(0x2F39, DEBUG); // hash of v0.4
+#endif
 MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
 
 void onNewAddress(uint32_t uid, uint16_t locId, void *)

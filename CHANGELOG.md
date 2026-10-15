@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- Arduino IDE, Uno and Mega: the examples did not compile ("'ACAN2515' does not name a type"). The IDE finds libraries only from the includes of the sketch: the examples now include `<ACAN2515.h>` on AVR, and the README says to do so. PlatformIO was not affected.
+- The MCP2515 quartz could not be set from the Arduino IDE: a `#define RAILUINO_MCP2515_QUARTZ` in the sketch has no effect on the library. The AVR examples now create their `Mcp2515Driver` with an `MCP2515_QUARTZ` constant (16 MHz, 8 MHz for most cheap modules) and pass it to `TrackController`.
+- The default CAN driver is built on first use only, so a sketch that passes its own driver no longer has a second, unused one in RAM.
+
 ### Changed
 - Examples: the ESP32 CAN pins (`CAN_RX`, `CAN_TX`) are declared and used only on ESP32 (`#if defined(ARDUINO_ARCH_ESP32)`); Uno and Mega call `ctrl.begin()` (MCP2515 on the SPI bus). Before, the pins were passed and silently ignored on AVR. Constants are `constexpr`.
 

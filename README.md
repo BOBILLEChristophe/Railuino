@@ -31,21 +31,25 @@ Vidéo : https://youtu.be/x5fVPsChlIA
 | ESP32 | MCP2515 sur le bus SPI | `Mcp2515Driver` | [ACAN2515](https://github.com/pierremolinaro/acan2515) ≥ 2.1.3 |
 | Arduino Uno, Mega | MCP2515 sur le bus SPI | `Mcp2515Driver` (par défaut) | [ACAN2515](https://github.com/pierremolinaro/acan2515) ≥ 2.1.3 |
 
-Sans pilote indiqué, `TrackController` prend le pilote par défaut de la carte. Pour en choisir un autre :
+Sans pilote indiqué, `TrackController` prend le pilote par défaut de la carte. Pour en choisir un autre, ou pour régler le MCP2515 :
 
 ```cpp
 #include <ACAN2515.h>
 #include <Railuino.h>
 
-Mcp2515Driver can(5, 4, 8000000UL);   // CS, INT, quartz
+Mcp2515Driver can(10, 2, 8000000UL);  // CS, INT, quartz
 TrackController ctrl(can, 0xDF24);
 ```
 
-Sur AVR, le quartz et les broches du MCP2515 par défaut se changent aussi sans modifier la bibliothèque, par exemple dans `platformio.ini` :
+**Module MCP2515 : vérifiez son quartz.** La plupart des modules bon marché ont un quartz de **8 MHz**, alors que la valeur par défaut est 16 MHz. Avec une mauvaise valeur, le débit du bus est faux et rien ne passe. Les exemples ont une constante `MCP2515_QUARTZ` à changer en tête du croquis.
+
+Un `#define RAILUINO_MCP2515_QUARTZ` placé dans le croquis **n'a aucun effet** : la bibliothèque est compilée à part. Ces valeurs par défaut ne se changent que par les options de compilation, possibles avec PlatformIO :
 
 ```ini
 build_flags = -D RAILUINO_MCP2515_QUARTZ=8000000UL -D RAILUINO_MCP2515_CS=10 -D RAILUINO_MCP2515_INT=2
 ```
+
+**IDE Arduino, Uno et Mega :** incluez `<ACAN2515.h>` **avant** `<Railuino.h>`, comme ci-dessus. L'IDE ne trouve les bibliothèques qu'à partir des `#include` du croquis ; sans cette ligne, la compilation échoue avec « 'ACAN2515' does not name a type ».
 
 Pour un autre contrôleur CAN, dérivez la classe `CanDriver` (`src/CanDriver.h`).
 
@@ -64,6 +68,9 @@ Les dépendances (ACAN_ESP32 ou ACAN2515) sont installées automatiquement. Pour
 ## Premier programme
 
 ```cpp
+#if defined(ARDUINO_ARCH_AVR)
+#include <ACAN2515.h>   // Uno, Mega : pour que l'IDE Arduino trouve la bibliothèque
+#endif
 #include <Railuino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -173,7 +180,9 @@ Arduino / PlatformIO library to control a Märklin layout through its CAN bus (G
 - Install with PlatformIO: `lib_deps = bobillechristophe/Railuino@^0.14.0`, or, in the Arduino IDE, *Tools → Manage Libraries*, search for **Railuino** and install it with its dependencies.
 - Include `<Railuino.h>` only. Incoming messages (MS2, feedback): `onMessage()` + `poll()`, see the `Monitor` example; text commands: `CommandParser`; protocol constants: `MarklinProtocol.h`. The constructor always takes the hash first: `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`.
 - MFX: `MfxRegistry` keeps UID -> Loc-ID; observer mode with an MS2 (learns its Bind messages), master mode without (Discovery, Bind, Verify). See `examples/03.Mfx`.
-- CAN drivers: `Esp32TwaiDriver` (ESP32 default) and `Mcp2515Driver` (AVR default, also on ESP32). Pass one to `TrackController(can, hash)` to choose; derive `CanDriver` for another controller. ESP32 pins go to `begin(rx, tx)`; default MCP2515 settings: `RAILUINO_MCP2515_QUARTZ`, `_CS`, `_INT`.
+- CAN drivers: `Esp32TwaiDriver` (ESP32 default) and `Mcp2515Driver` (AVR default, also on ESP32). Pass one to `TrackController(can, hash)` to choose; derive `CanDriver` for another controller. ESP32 pins go to `begin(rx, tx)`.
+- **MCP2515 modules: check the quartz.** Most cheap modules have an 8 MHz quartz; the default is 16 MHz. Declare the driver: `Mcp2515Driver can(10, 2, 8000000UL); TrackController ctrl(can, 0xDF24);` (the examples have an `MCP2515_QUARTZ` constant). A `#define RAILUINO_MCP2515_QUARTZ` in the sketch has no effect; `-D RAILUINO_MCP2515_QUARTZ=...` build flags work with PlatformIO.
+- **Arduino IDE, Uno and Mega:** include `<ACAN2515.h>` before `<Railuino.h>`, otherwise the IDE does not find the library ("'ACAN2515' does not name a type").
 - Examples are in `examples/01.Controller` (see the table above). TcpCommand and WebControl need an ESP32 and a `secrets.h` file created from `secrets.h.example`.
 - Development: `platformio.ini` builds one example against `src/`; `pio test -e native` runs the unit tests; `sh extras/build_examples.sh` builds every example. GitHub Actions runs both on every push.
 
