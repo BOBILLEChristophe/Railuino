@@ -31,11 +31,20 @@
 -------------------------------------------------------------------  */
 
 #if defined(ARDUINO_ARCH_ESP32)
-static Esp32TwaiDriver sDefaultDriver;
-static CanDriver *defaultDriver() { return &sDefaultDriver; }
+// Built on first use only: a sketch that passes its own driver does not
+// pay for an unused one (RAM, and a second ACAN object).
+static CanDriver *defaultDriver()
+{
+    static Esp32TwaiDriver driver;
+    return &driver;
+}
 #elif defined(ARDUINO_ARCH_AVR)
-static Mcp2515Driver sDefaultDriver;
-static CanDriver *defaultDriver() { return &sDefaultDriver; }
+// Built on first use only (see above).
+static CanDriver *defaultDriver()
+{
+    static Mcp2515Driver driver;
+    return &driver;
+}
 #else
 // Other platforms (e.g. native unit tests): a driver must be given.
 static CanDriver *defaultDriver() { return nullptr; }

@@ -1,7 +1,8 @@
 # Runs on every push and pull request:
 #   1. unit tests on Linux (pio test -e native, simulated CAN bus);
 #   2. every example compiled for ESP32, Uno and Mega;
-#   3. Arduino Lint: the rules of the Arduino Library Manager.
+#   3. Arduino Lint: the rules of the Arduino Library Manager;
+#   4. the AVR examples compiled as the Arduino IDE does (arduino-cli).
 name: CI
 
 on:
@@ -61,3 +62,35 @@ jobs:
         with:
           library-manager: update
           compliance: strict
+
+  # Same examples compiled as the Arduino IDE does (arduino-cli), with the
+  # libraries of the Library Manager: the IDE finds libraries only from the
+  # includes of the sketch, which PlatformIO does not show.
+  arduino-ide:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fqbn: ["arduino:avr:uno", "arduino:avr:mega"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/compile-sketches@v1
+        with:
+          fqbn: ${{ matrix.fqbn }}
+          libraries: |
+            - source-path: ./
+            - name: ACAN2515
+          sketch-paths: |
+            - examples/01.Controller/Power
+            - examples/01.Controller/Speed
+            - examples/01.Controller/Direction
+            - examples/01.Controller/Headlight
+            - examples/01.Controller/Function
+            - examples/01.Controller/Turnout
+            - examples/01.Controller/CV
+            - examples/01.Controller/TestAddressLoco
+            - examples/01.Controller/SerialCommand
+            - examples/01.Controller/Monitor
+            - examples/01.Controller/DesktopStation
+            - examples/03.Mfx/MfxObserver
+            - examples/03.Mfx/MfxMaster
