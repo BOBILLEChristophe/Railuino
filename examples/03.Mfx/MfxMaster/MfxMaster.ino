@@ -61,10 +61,10 @@ void onNewAddress(uint32_t uid, uint16_t locId, void *)
 {
   Serial.print(F("Loco "));
   Serial.print(uid, HEX);
-  Serial.print(F(" confirmed, Loc-ID 0x"));
+  Serial.print(F(" confirmed, SID "));
+  Serial.print(locId - ADDR_MFX); // the value to put in SID of the examples
+  Serial.print(F(" (Loc-ID 0x"));
   Serial.print(locId, HEX);
-  Serial.print(F(" ("));
-  Serial.print(locId);
   Serial.println(F(")"));
 }
 
