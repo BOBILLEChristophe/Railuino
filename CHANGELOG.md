@@ -9,6 +9,7 @@
 
 ### Changed
 - Examples: the ESP32 CAN pins (`CAN_RX`, `CAN_TX`) are declared and used only on ESP32 (`#if defined(ARDUINO_ARCH_ESP32)`); Uno and Mega call `ctrl.begin()` (MCP2515 on the SPI bus). Before, the pins were passed and silently ignored on AVR. Constants are `constexpr`.
+- Examples Speed, Direction, Headlight, Function and CV: the locomotive is set by its MFX `SID` (`LOCO = ADDR_MFX + SID`), with a comment that tells how to find it (example MfxObserver) and how to use an MM2 or DCC loco instead. MfxObserver now prints the SID of each registered loco.
 
 ## 0.14.0 — 2026-10-12 (first published release)
 
