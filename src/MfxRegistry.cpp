@@ -226,10 +226,28 @@ void MfxRegistry::printTo(Print &out) const
 {
   out.println(F("---- MFX locomotives ----"));
   bool any = false;
-  for (const Entry &e : mEntries)
+  // Sorted by SID, without sorting the table: each turn prints the entry
+  // that comes next after the previous one (SID, then index).
+  uint16_t lastSid = 0;
+  int lastIndex = -1;
+  for (;;)
   {
-    if (e.state == State::Free)
-      continue;
+    int next = -1;
+    for (int i = 0; i < MAX_LOCOS; i++)
+    {
+      const Entry &c = mEntries[i];
+      if (c.state == State::Free)
+        continue;
+      const bool after = c.sid > lastSid || (c.sid == lastSid && i > lastIndex);
+      const bool before = next < 0 || c.sid < mEntries[next].sid;
+      if (after && before)
+        next = i;
+    }
+    if (next < 0)
+      break;
+    lastSid = mEntries[next].sid;
+    lastIndex = next;
+    const Entry &e = mEntries[next];
     any = true;
     out.print(F("UID "));
     TrackMessage::printHex(out, e.uid, 8);

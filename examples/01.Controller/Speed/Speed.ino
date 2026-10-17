@@ -40,7 +40,24 @@ constexpr uint32_t MCP2515_QUARTZ = 16000000UL; // 8000000UL for 8 MHz
 Mcp2515Driver can(10, 2, MCP2515_QUARTZ);       // CS, INT, quartz
 #endif
 
-constexpr uint16_t LOCO = ADDR_MFX + 7; // Change with your own address
+// MFX address (SID) of your locomotive. To find it:
+// - with an MS2: run the example 03.Mfx/MfxObserver, then register the
+//   loco on the MS2 (remove it and put it back on the track);
+// - without an MS2 (Gleisbox only): run the example 03.Mfx/MfxMaster,
+//   which registers the loco and gives it its SID (5, 6...).
+// The SID is printed; the loco keeps it until it is registered again.
+// Adresse MFX (SID) de votre locomotive. Pour la trouver :
+// - avec une MS2 : lancez l'exemple 03.Mfx/MfxObserver, puis faites
+//   inscrire la loco sur la MS2 (supprimez-la et reposez-la sur la voie) ;
+// - sans MS2 (Gleisbox seule) : lancez l'exemple 03.Mfx/MfxMaster, qui
+//   inscrit la loco et lui donne son SID (5, 6...).
+// Le SID s'affiche ; la loco le garde jusqu'à une nouvelle inscription.
+constexpr uint16_t SID = 7; // Change with your own SID
+
+// MM2 or DCC locomotive: ADDR_MM2 + address or ADDR_DCC + address.
+// Loco MM2 ou DCC : ADDR_MM2 + adresse ou ADDR_DCC + adresse.
+constexpr uint16_t LOCO = ADDR_MFX + SID;
+
 constexpr uint16_t SPEED = 100;         // 0..1000
 constexpr uint32_t TIME = 5000;         // ms
 constexpr bool DEBUG = false;
