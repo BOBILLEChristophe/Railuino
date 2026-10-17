@@ -325,8 +325,7 @@ static uint8_t minAnswerLength(uint8_t command)
     {
     case Cmd::Direction:
         return 5; // direction in data[4]
-    case Cmd::ReadConfig:
-        return 7; // CV number in data[4..5], value in data[6]
+    case Cmd::ReadConfig:  // CV number in data[4..5]; value in data[6], absent if not read
     case Cmd::Speed:       // speed in data[4..5]
     case Cmd::Function:    // function, value in data[4..5]
     case Cmd::WriteConfig: // CV number in data[4..5]
@@ -759,30 +758,49 @@ bool TrackController::getAccessory(const uint32_t address, uint8_t *position, ui
    Decoder configuration (CV)
 -------------------------------------------------------------------  */
 
-bool TrackController::readConfig(const uint32_t address, uint16_t number, uint8_t *value)
+// CV number and index in data[4..5] (CS2 CAN protocol 3.7 and 3.8):
+// index in the 6 high bits of data[4], CV number (10 bits) in the
+// 2 low bits of data[4] and in data[5].
+static void putCv(TrackMessage &message, uint16_t number, uint8_t index)
+{
+    message.data[4] = static_cast<uint8_t>(((index & 0x3F) << 2) | ((number >> 8) & 0x03));
+    message.data[5] = static_cast<uint8_t>(number & 0xFF);
+}
+
+bool TrackController::readConfig(const uint32_t address, uint16_t number, uint8_t *value,
+                                 uint8_t index)
 {
     TrackMessage message = TrackMessage::make(Cmd::ReadConfig, address, 7);
-    message.data[4] = highByte(number);
-    message.data[5] = lowByte(number);
+    putCv(message, number, index);
     message.data[6] = 0x01; // number of bytes to read
 
     if (!exchangeMessage(message, message, CV_TIMEOUT))
+        return false;
+    // Answer without a value (DLC 6): the CV could not be read.
+    if (message.length < 7)
         return false;
     if (value != nullptr)
         *value = message.data[6];
     return true;
 }
 
-bool TrackController::writeConfig(const uint32_t address, uint16_t number, uint8_t value)
+bool TrackController::writeConfig(const uint32_t address, uint16_t number, uint8_t value,
+                                  uint8_t index, bool mainTrack, uint8_t *result)
 {
     TrackMessage message = TrackMessage::make(Cmd::WriteConfig, address, 8);
-    message.prio = 0x01;
-    message.data[4] = highByte(number);
-    message.data[5] = lowByte(number);
+    putCv(message, number, index);
     message.data[6] = value;
+    // Ctrl, bit 8: main track (1) or programming track (0). The Gleisbox
+    // has no programming track: 0 was sent before and DCC POM could not work.
+    message.data[7] = mainTrack ? 0x80 : 0x00;
 
     // CV_TIMEOUT (10 s), as in Railuino 0.9: a write can take seconds.
-    return exchangeMessage(message, message, CV_TIMEOUT);
+    if (!exchangeMessage(message, message, CV_TIMEOUT))
+        return false;
+    // Rslt, bit 8: write acknowledged, bit 7: verify OK.
+    if (result != nullptr)
+        *result = message.length >= 8 ? message.data[7] : 0;
+    return true;
 }
 
 /* -------------------------------------------------------------------

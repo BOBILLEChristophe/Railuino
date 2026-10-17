@@ -158,6 +158,63 @@ void test_answer_must_match_function_cv_and_length()
     TEST_ASSERT_EQUAL_UINT8(7, value);
 }
 
+void test_read_config_refused_at_once()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    // The Gleisbox could not read the CV: answer without a value (DLC 6).
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x07)
+            bus->rx.push_back(answer(0x07, {0, 0, 0x40, 0x07, 0, 1}));
+    };
+    uint8_t value = 99;
+    const uint32_t start = g_millis;
+    TEST_ASSERT_FALSE(ctrl.readConfig(0x4007, 1, &value));
+    TEST_ASSERT_EQUAL_UINT8(99, value);
+    TEST_ASSERT_TRUE(g_millis - start < 1000); // not the 10 s timeout
+}
+
+void test_config_cv_number_and_index()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x07)
+            bus->rx.push_back(answer(0x07, {0, 0, 0x40, 0x07, f.data[4], f.data[5], 42}));
+    };
+    uint8_t value = 0;
+    // CV 0x123, index 5: data[4] = 5 << 2 | 0x01, data[5] = 0x23.
+    TEST_ASSERT_TRUE(ctrl.readConfig(0x4007, 0x123, &value, 5));
+    TEST_ASSERT_EQUAL_UINT8(42, value);
+    const CanFrame &sent = bus->sent.back();
+    TEST_ASSERT_EQUAL_UINT8(7, sent.len);
+    TEST_ASSERT_EQUAL_HEX8(0x15, sent.data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x23, sent.data[5]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, sent.data[6]);
+}
+
+void test_write_config_main_track_and_result()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    bus->onSend = [](const CanFrame &f) {
+        if (commandOf(f) == 0x08)
+            bus->rx.push_back(answer(0x08, {0, 0, 0xC0, 0x03, 0, 3, 12, 0xC0}));
+    };
+    uint8_t result = 0;
+    TEST_ASSERT_TRUE(ctrl.writeConfig(0xC003, 3, 12, 0, true, &result));
+    const CanFrame &sent = bus->sent.back();
+    TEST_ASSERT_EQUAL_UINT8(8, sent.len);
+    TEST_ASSERT_EQUAL_HEX8(0x00, sent.data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x03, sent.data[5]);
+    TEST_ASSERT_EQUAL_HEX8(12, sent.data[6]);
+    TEST_ASSERT_EQUAL_HEX8(0x80, sent.data[7]); // main track (POM)
+    TEST_ASSERT_EQUAL_HEX8(0xC0, result);       // written and verified
+
+    // Default call: main track too; programming track on request.
+    TEST_ASSERT_TRUE(ctrl.writeConfig(0xC003, 3, 12));
+    TEST_ASSERT_EQUAL_HEX8(0x80, bus->sent.back().data[7]);
+    TEST_ASSERT_TRUE(ctrl.writeConfig(0xC003, 3, 12, 0, false));
+    TEST_ASSERT_EQUAL_HEX8(0x00, bus->sent.back().data[7]);
+}
+
 void test_system_sub_command_must_match()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -883,5 +940,8 @@ int main()
     RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
     RUN_TEST(test_bind_answer_for_another_uid_is_ignored);
     RUN_TEST(test_mfx_list_is_sorted_by_sid);
+    RUN_TEST(test_read_config_refused_at_once);
+    RUN_TEST(test_config_cv_number_and_index);
+    RUN_TEST(test_write_config_main_track_and_result);
     return UNITY_END();
 }

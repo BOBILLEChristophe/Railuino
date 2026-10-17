@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Fixed
+- `writeConfig()` sent 0 in the control byte (data[7]), which means "programming track": a DCC write on the main track (POM) could not work with a Gleisbox. It now writes on the main track by default (`mainTrack = false` for a programming track) and can return the result byte (write acknowledged, verify OK). The unexplained priority 1 is removed.
+- `readConfig()`: when the Gleisbox answers that it could not read the CV (answer without a value, DLC 6), it returns false at once instead of waiting for the 10 s timeout.
+- `readConfig()` / `writeConfig()`: the CV number (10 bits) and the MFX index (6 bits) are placed as in the CS2 CAN protocol; new optional `index` parameter.
+- Example CV: the values of an MFX decoder are no longer printed with DCC names (Address, Max. speed...): on MFX, the numbers address the MFX configuration space. The comment says what can be read with a Gleisbox (MFX: yes, DCC: programming track only, MM2: no).
 - Arduino IDE, Uno and Mega: the examples did not compile ("'ACAN2515' does not name a type"). The IDE finds libraries only from the includes of the sketch: the examples now include `<ACAN2515.h>` on AVR, and the README says to do so. PlatformIO was not affected.
 - The MCP2515 quartz could not be set from the Arduino IDE: a `#define RAILUINO_MCP2515_QUARTZ` in the sketch has no effect on the library. The AVR examples now create their `Mcp2515Driver` with an `MCP2515_QUARTZ` constant (16 MHz, 8 MHz for most cheap modules) and pass it to `TrackController`.
 - The default CAN driver is built on first use only, so a sketch that passes its own driver no longer has a second, unused one in RAM.
