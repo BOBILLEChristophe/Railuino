@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.1 — 2026-10-17
 
 ### Fixed
 - `writeConfig()` sent 0 in the control byte (data[7]), which means "programming track": a DCC write on the main track (POM) could not work with a Gleisbox. It now writes on the main track by default (`mainTrack = false` for a programming track) and can return the result byte (write acknowledged, verify OK). The unexplained priority 1 is removed.
