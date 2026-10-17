@@ -16,8 +16,22 @@
  */
 
 /*
- * Reads the first configuration variables (CVs) of a locomotive decoder.
- * Lit les premières variables de configuration (CV) d'un décodeur.
+ * Reads the first configuration bytes of a locomotive decoder.
+ * Lit les premiers octets de configuration d'un décodeur.
+ *
+ * - MFX loco: read on the main track. The numbers address the MFX
+ *   configuration space of the decoder, not DCC CVs: the values are
+ *   printed as they are.
+ * - DCC loco: read only on a programming track, which the Gleisbox does
+ *   not have. The names of the DCC CVs are printed.
+ * - MM2 loco: cannot be read.
+ *
+ * - Loco MFX : lecture sur la voie principale. Les numéros désignent
+ *   l'espace de configuration MFX du décodeur, pas des CV DCC : les
+ *   valeurs sont affichées telles quelles.
+ * - Loco DCC : lecture seulement sur une voie de programmation, que la
+ *   Gleisbox n'a pas. Les noms des CV DCC sont affichés.
+ * - Loco MM2 : lecture impossible.
  *
  * Warning / Attention : first-generation MFX decoders are not designed for
  * this and could be damaged. Les décodeurs MFX de première génération ne
@@ -58,9 +72,11 @@ Mcp2515Driver can(10, 2, MCP2515_QUARTZ);       // CS, INT, quartz
 // Le SID s'affiche ; la loco le garde jusqu'à une nouvelle inscription.
 constexpr uint16_t SID = 7; // Change with your own SID
 
-// MM2 or DCC locomotive: ADDR_MM2 + address or ADDR_DCC + address.
-// Loco MM2 ou DCC : ADDR_MM2 + adresse ou ADDR_DCC + adresse.
+// DCC locomotive: ADDR_DCC + address.
+// Loco DCC : ADDR_DCC + adresse.
 constexpr uint16_t LOCO = ADDR_MFX + SID;
+
+constexpr uint8_t COUNT = 8; // bytes / CVs read: 1..COUNT
 
 constexpr bool DEBUG = false;
 
@@ -70,17 +86,13 @@ TrackController ctrl(can, 0, DEBUG);
 TrackController ctrl(0, DEBUG);
 #endif
 
-void showRegister(uint16_t number, const __FlashStringHelper *label)
-{
-  uint8_t value = 0;
-  Serial.print(F("Register "));
-  Serial.print(label);
-  Serial.print(F(" : "));
-  if (ctrl.readConfig(LOCO, number, &value))
-    Serial.println(value);
-  else
-    Serial.println(F("no answer"));
-}
+// Names of the first DCC CVs (NMRA). Not valid for an MFX decoder.
+const char *const DCC_NAMES[] = {
+    "Address", "Min. voltage", "Accel. time", "Decel. time",
+    "Max. speed", "Mid. speed", "Version", "Manufacturer"};
+
+bool isDcc(uint16_t loco) { return loco >= ADDR_DCC; }
+bool isMfx(uint16_t loco) { return loco >= ADDR_MFX && loco < ADDR_DCC; }
 
 void setup()
 {
@@ -95,14 +107,44 @@ void setup()
   Serial.println(F("Power on"));
   ctrl.setPower(true);
 
-  showRegister(1, F("Address"));
-  showRegister(2, F("Min. Voltage"));
-  showRegister(3, F("Accel. time"));
-  showRegister(4, F("Decel. time"));
-  showRegister(5, F("Max. speed"));
-  showRegister(6, F("Avg. speed"));
-  showRegister(7, F("Version"));
-  showRegister(8, F("Manufacturer"));
+  if (!isMfx(LOCO) && !isDcc(LOCO))
+  {
+    Serial.println(F("MM2 decoders cannot be read. Need to reset."));
+    return;
+  }
+  if (isDcc(LOCO))
+    Serial.println(F("DCC: needs a programming track (not with a Gleisbox)."));
+
+  for (uint8_t number = 1; number <= COUNT; number++)
+  {
+    uint8_t value = 0;
+    if (isMfx(LOCO))
+    {
+      Serial.print(F("MFX config "));
+      Serial.print(number);
+    }
+    else
+    {
+      Serial.print(F("CV "));
+      Serial.print(number);
+      if (number <= sizeof(DCC_NAMES) / sizeof(DCC_NAMES[0]))
+      {
+        Serial.print(F(" ("));
+        Serial.print(DCC_NAMES[number - 1]);
+        Serial.print(F(")"));
+      }
+    }
+    Serial.print(F(" : "));
+    if (ctrl.readConfig(LOCO, number, &value))
+    {
+      Serial.print(value);
+      Serial.print(F(" (0x"));
+      Serial.print(value, HEX);
+      Serial.println(F(")"));
+    }
+    else
+      Serial.println(F("no answer"));
+  }
 
   Serial.println(F("System stopped. Need to reset."));
 }

@@ -508,32 +508,42 @@ public:
    */
   bool getAccessory(const uint32_t address, uint8_t *position, uint8_t *power);
 
-  /**
-   * Writes the given value to the given config number of the given
-   * locomotive.  The return value reflects whether the call was
-   * successful.
-   */
   /* -------------------------------------------------------------------
-     TrackController::writeConfig
+     TrackController::writeConfig / readConfig
 
-     See https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf -> 3.8 Commande : Écrire Config
-
-  -------------------------------------------------------------------  */
-  bool writeConfig(const uint32_t address, uint16_t number, uint8_t value);
+     Commands 0x08 "Write Config" and 0x07 "Read Config" of the CS2 CAN
+     protocol (cs2CAN-Protokoll-2_0.pdf, 3.7 and 3.8).
+     - number: CV number (1..1023), index: 0..63 (MFX; 0 for DCC).
+       They share data[4..5]: index in the 6 high bits of data[4], CV
+       number in the 2 low bits of data[4] and in data[5].
+     - MFX: read and write on the main track. DCC: write on the main
+       track (POM); read only on a programming track (not with a
+       Gleisbox). MM2: no read.
+     - On an MFX decoder, the numbers address the MFX configuration
+       space, not DCC-like CVs.
+     Uses CV_TIMEOUT (10 s). Only one CV command at a time.
+     //!\\ First-generation MFX decoders are not designed for this
+     //!\\ purpose and could be damaged.
+  ------------------------------------------------------------------- */
 
   /**
-   * Reads the given config number of the given locomotive into the
-   * given value.
+   * Writes 'value' to CV 'number'. mainTrack: true (default) for the
+   * main track (POM), false for a programming track. Returns true if
+   * the Gleisbox answered. 'result', if not nullptr, receives its result
+   * byte: bit 7 (0x80) write acknowledged, bit 6 (0x40) verify OK.
+   * Depending on the decoder, a write can succeed with a negative result.
    */
+  bool writeConfig(const uint32_t address, uint16_t number, uint8_t value,
+                   uint8_t index = 0, bool mainTrack = true,
+                   uint8_t *result = nullptr);
 
-  //!\\ Les décodeurs MFX de première génération ne sont pas conçus pour cela et pourraient être endommagés
-  //!\\ First-generation MFX decoders are not designed for this purpose and could be damaged.
-
-  // Command 0x07 "Read Config" of the CS2 CAN protocol
-  // (https://streaming.maerklin.de/public-media/cs2/cs2CAN-Protokoll-2_0.pdf).
-  // Uses CV_TIMEOUT (10 s).
-
-  bool readConfig(const uint32_t address, uint16_t number, uint8_t *value);
+  /**
+   * Reads CV 'number' into 'value'. Returns false if there is no answer
+   * or if the Gleisbox answers that it could not read it (at once, without
+   * waiting for the timeout).
+   */
+  bool readConfig(const uint32_t address, uint16_t number, uint8_t *value,
+                  uint8_t index = 0);
 
   /**
    * Queries the software version of the track format processor
