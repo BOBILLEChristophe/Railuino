@@ -48,6 +48,7 @@ constexpr uint32_t MCP2515_QUARTZ = 16000000UL; // 8000000UL for 8 MHz
 Mcp2515Driver can(10, 2, MCP2515_QUARTZ);       // CS, INT, quartz
 #endif
 
+constexpr uint32_t SEARCH_TIME = 10000; // ms: the locos on the track answer
 constexpr bool DEBUG = false;
 
 #if defined(ARDUINO_ARCH_AVR)
@@ -56,6 +57,7 @@ TrackController ctrl(can, 0x2F39, DEBUG); // hash of v0.4
 TrackController ctrl(0x2F39, DEBUG); // hash of v0.4
 #endif
 MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
+uint8_t confirmed = 0; // locos confirmed since the start
 
 void onNewAddress(uint32_t uid, uint16_t locId, void *)
 {
@@ -66,6 +68,7 @@ void onNewAddress(uint32_t uid, uint16_t locId, void *)
   Serial.print(F(" (Loc-ID 0x"));
   Serial.print(locId, HEX);
   Serial.println(F(")"));
+  confirmed++;
 }
 
 void setup()
@@ -88,6 +91,17 @@ void setup()
   mfx.onChange(onNewAddress);
   Serial.println(F("Start sequence (about 6 s)..."));
   mfx.begin(); // Stop, wake-up, counter, Verify, Go, Discovery
+
+  // The locos answer after the discovery, a few seconds later: wait for
+  // them here, so that their lines come before the menu.
+  // Les locos répondent après la recherche, quelques secondes plus tard :
+  // on les attend ici, pour que leurs lignes viennent avant le menu.
+  Serial.println(F("Searching for the locos on the track (10 s)..."));
+  const uint32_t start = millis();
+  while (millis() - start < SEARCH_TIME)
+    ctrl.poll();
+  Serial.print(confirmed);
+  Serial.println(F(" loco(s) confirmed. Locos put on the track later are registered too."));
   Serial.println(F("d = discovery, l = list, r = register again, c = clear"));
 }
 
