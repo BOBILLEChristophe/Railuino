@@ -669,6 +669,29 @@ void test_mfx_observer_learns_from_the_ms2()
     TEST_ASSERT_TRUE(bus->sent.empty());
 }
 
+void test_mfx_list_is_sorted_by_sid()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl);
+    mfx.begin();
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0001UL, 13));
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0002UL, 5));
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0003UL, 9));
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0004UL, 6));
+
+    Print out;
+    mfx.printTo(out);
+    const size_t p5 = out.out.find("SID 5 ");
+    const size_t p6 = out.out.find("SID 6 ");
+    const size_t p9 = out.out.find("SID 9 ");
+    const size_t p13 = out.out.find("SID 13 ");
+    TEST_ASSERT_TRUE(p5 != std::string::npos && p6 != std::string::npos);
+    TEST_ASSERT_TRUE(p9 != std::string::npos && p13 != std::string::npos);
+    TEST_ASSERT_TRUE(p5 < p6 && p6 < p9 && p9 < p13);
+    TEST_ASSERT_EQUAL_UINT8(4, mfx.size()); // the table itself is unchanged
+    TEST_ASSERT_EQUAL_HEX32(0xAAAA0001UL, mfx.entry(0).uid);
+}
+
 void test_mfx_assign_seeds_the_table()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -859,5 +882,6 @@ int main()
     RUN_TEST(test_mfx_master_gives_up_after_3_tries);
     RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
     RUN_TEST(test_bind_answer_for_another_uid_is_ignored);
+    RUN_TEST(test_mfx_list_is_sorted_by_sid);
     return UNITY_END();
 }
