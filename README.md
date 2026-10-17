@@ -58,7 +58,7 @@ Pour un autre contrôleur CAN, dérivez la classe `CanDriver` (`src/CanDriver.h`
 **PlatformIO** : dans le `platformio.ini` de votre projet
 
 ```ini
-lib_deps = bobillechristophe/Railuino@^0.14.0
+lib_deps = bobillechristophe/Railuino@^0.14.1
 ```
 
 Les dépendances (ACAN_ESP32 ou ACAN2515) sont installées automatiquement. Pour suivre la version en cours de développement : `lib_deps = https://github.com/BOBILLEChristophe/Railuino.git`.
@@ -177,7 +177,7 @@ Copyright (C) 2012 Joerg Pleumann, (C) 2024 – 2026 Christophe Bobille, (C) 202
 
 Arduino / PlatformIO library to control a Märklin layout through its CAN bus (Gleisbox, MS2, CS2) from an **ESP32** or an **Arduino Uno / Mega with an MCP2515**. Rewrite of Joerg Pleumann's Railuino 0.9.
 
-- Install with PlatformIO: `lib_deps = bobillechristophe/Railuino@^0.14.0`, or, in the Arduino IDE, *Tools → Manage Libraries*, search for **Railuino** and install it with its dependencies.
+- Install with PlatformIO: `lib_deps = bobillechristophe/Railuino@^0.14.1`, or, in the Arduino IDE, *Tools → Manage Libraries*, search for **Railuino** and install it with its dependencies.
 - Include `<Railuino.h>` only. Incoming messages (MS2, feedback): `onMessage()` + `poll()`, see the `Monitor` example; text commands: `CommandParser`; protocol constants: `MarklinProtocol.h`. The constructor always takes the hash first: `TrackController(hash, debug = false, timeout_ms = 1000, loopback = false)`.
 - MFX: `MfxRegistry` keeps UID -> Loc-ID; observer mode with an MS2 (learns its Bind messages), master mode without (Discovery, Bind, Verify). See `examples/03.Mfx`.
 - CAN drivers: `Esp32TwaiDriver` (ESP32 default) and `Mcp2515Driver` (AVR default, also on ESP32). Pass one to `TrackController(can, hash)` to choose; derive `CanDriver` for another controller. ESP32 pins go to `begin(rx, tx)`.
