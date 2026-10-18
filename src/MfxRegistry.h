@@ -98,6 +98,7 @@ public:
   static const uint8_t MAX_TRIES = 3;
   static const uint32_t BIND_TO_VERIFY_MS = 20;
   static const uint32_t VERIFY_TIMEOUT_MS = 1000;
+  static const uint16_t RELEASE_SIDS = 64;       ///< SIDs released by clear() (master)
   static const uint32_t RECHECK_INTERVAL_MS = 5000; ///< delay between automatic checks of absent saved locos
 
   /**
@@ -218,8 +219,9 @@ public:
 
   /**
    * Forgets every locomotive (the saved table too if auto-save is on).
-   * Master mode: each one is released first (see release()), then a
-   * discovery is started, so the locos on the track register again.
+   * Master mode: SIDs 1 .. RELEASE_SIDS (or up to the highest SID of the
+   * table) are released first (see release()), then a discovery is
+   * started, so the locos on the track register again. About 1 s.
    */
   void clear();
 

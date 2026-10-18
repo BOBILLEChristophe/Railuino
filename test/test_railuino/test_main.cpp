@@ -901,15 +901,16 @@ void test_mfx_master_clear_releases_and_reregistration_cuts_power()
     TEST_ASSERT_TRUE(mfx.assign(0xAAAA0001UL, 5));
     TEST_ASSERT_TRUE(mfx.assign(0xAAAA0002UL, 7));
 
-    // clear(): Verify with UID 0 and each SID, then a discovery.
+    // clear(): Verify with UID 0 for SIDs 1..64 (also the locos no longer
+    // in the table), then a discovery.
     bus->sent.clear();
     mfx.clear();
-    TEST_ASSERT_EQUAL_size_t(3, bus->sent.size());
-    TEST_ASSERT_EQUAL_HEX8(0x03, commandOf(bus->sent[0]));
-    const uint8_t release5[6] = {0, 0, 0, 0, 0x00, 0x05};
-    TEST_ASSERT_EQUAL_HEX8_ARRAY(release5, bus->sent[0].data, 6);
-    TEST_ASSERT_EQUAL_HEX8(0x07, bus->sent[1].data[5]);
-    TEST_ASSERT_EQUAL_HEX8(0x01, commandOf(bus->sent[2]));
+    TEST_ASSERT_EQUAL_size_t(MfxRegistry::RELEASE_SIDS + 1, bus->sent.size());
+    TEST_ASSERT_EQUAL_INT(MfxRegistry::RELEASE_SIDS, bus->countSent(0x03));
+    const uint8_t release1[6] = {0, 0, 0, 0, 0x00, 0x01};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(release1, bus->sent[0].data, 6);
+    TEST_ASSERT_EQUAL_HEX8(0x07, bus->sent[6].data[5]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, commandOf(bus->sent.back()));
     TEST_ASSERT_EQUAL_UINT8(0, mfx.size());
 
     // forceReRegistration(): Stop, counter + 1, Go, discovery.

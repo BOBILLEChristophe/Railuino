@@ -277,15 +277,23 @@ void MfxRegistry::onChange(ChangeHandler handler, void *context)
 void MfxRegistry::clear()
 {
   const bool master = mMode == Mode::Master;
-  for (Entry &e : mEntries)
+  if (master)
   {
-    if (master && e.state != State::Free)
+    // Releases every SID up to the highest one in use (at least
+    // RELEASE_SIDS): also the locos that are no longer in the table,
+    // e.g. after a table cleared by an older version.
+    uint16_t last = RELEASE_SIDS;
+    for (const Entry &e : mEntries)
+      if (e.state != State::Free && e.sid > last)
+        last = e.sid;
+    for (uint16_t sid = 1; sid <= last; sid++)
     {
-      release(e.sid); // the decoder forgets its SID
-      delay(20);      // room in the CAN send queue
+      release(sid); // the decoder that has this SID forgets it
+      delay(10);    // room in the CAN send queue
     }
-    e = Entry();
   }
+  for (Entry &e : mEntries)
+    e = Entry();
   mDiscoveryPending = false;
   mRecheckPending = false;
   if (mAutoSave)
