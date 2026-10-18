@@ -38,7 +38,8 @@
  * donneraient des SID aux mêmes locomotives.
  *
  * Serial: l = list, d = new discovery, v = check the known locos again,
- *         r = every loco registers again, c = clear the table.
+ *         r = every loco registers again, c = clear the table (the locos
+ *         then register again, with new SIDs).
  */
 
 #if defined(ARDUINO_ARCH_AVR)
@@ -154,8 +155,13 @@ void loop()
       Serial.println(F("Re-registration requested"));
       break;
     case 'c':
+      // The decoders still remember their SID and would not answer a
+      // discovery: they are asked to register again.
+      // Les décodeurs gardent leur SID et ne répondraient pas à une
+      // recherche : on leur demande de se réinscrire.
       mfx.clear();
-      Serial.println(F("Table cleared"));
+      mfx.forceReRegistration();
+      Serial.println(F("Table cleared, every loco registers again"));
       break;
     case '\r':
     case '\n':
