@@ -23,7 +23,7 @@ Vidéo : https://youtu.be/x5fVPsChlIA
 
 ![Carte ESP32 avec transceiver CAN MCP2562, raccordée à la Gleisbox](extras/images/carte-esp32.jpg)
 
-*La carte de test, dessinée pour [Locoduino](https://www.locoduino.org) : un ESP32 DevKit, un transceiver CAN MCP2562 et un régulateur d'alimentation. Le bus CAN arrive sur le bornier vert (fils orange et vert).*
+*La carte de test, dessinée pour [Locoduino](https://www.locoduino.org) : un ESP32 DevKit, un transceiver CAN MCP2562 et un régulateur d'alimentation. Le bus CAN (fils orange et vert) et l'alimentation (fils rouge et noir) arrivent par le même câble, branché sur la Gleisbox.*
 
 | Carte | Contrôleur CAN | Pilote Railuino | Bibliothèque CAN |
 | --- | --- | --- | --- |
