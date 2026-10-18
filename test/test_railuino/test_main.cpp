@@ -843,6 +843,56 @@ void test_mfx_master_discovery_bind_verify()
     TEST_ASSERT_EQUAL_HEX8(0x06, bus->sent.back().data[5]);
 }
 
+void test_mfx_master_checks_known_locos_without_bind()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
+    ctrl.setMfxRegistry(&mfx); // without the start sequence
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0001UL, 5));
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0002UL, 6));
+    TEST_ASSERT_FALSE(mfx.busy());
+
+    // As after a restart: both are checked again, one at a time.
+    TEST_ASSERT_TRUE(mfx.verifyKnown());
+    TEST_ASSERT_TRUE(mfx.busy());
+    TEST_ASSERT_EQUAL_HEX16(0, mfx.locIdOf(0xAAAA0001UL));
+    bus->sent.clear();
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_size_t(1, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x03, commandOf(bus->sent[0])); // Verify, no Bind
+    TEST_ASSERT_EQUAL_HEX8(0x05, bus->sent[0].data[5]);
+
+    // The first loco answers: confirmed with its SID.
+    bus->rx.push_back(mfxFrame(0x03, true, 0x3363, 0xAAAA0001UL, 5, 1));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4005, mfx.locIdOf(0xAAAA0001UL));
+
+    // The second one never answers: 3 Verify, then unconfirmed, then discovery.
+    for (int i = 0; i < 10; i++)
+    {
+        ctrl.poll();
+        g_millis += MfxRegistry::VERIFY_TIMEOUT_MS;
+    }
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_INT(0, bus->countSent(0x02)); // never a Bind
+    TEST_ASSERT_EQUAL_INT(4, bus->countSent(0x03)); // 1 + 3 tries
+    TEST_ASSERT_EQUAL_INT(1, bus->countSent(0x01)); // discovery after the checks
+    TEST_ASSERT_EQUAL_HEX16(0, mfx.locIdOf(0xAAAA0002UL));
+    TEST_ASSERT_EQUAL_STRING("unconfirmed", MfxRegistry::stateName(mfx.entry(1).state));
+    TEST_ASSERT_FALSE(mfx.busy());
+
+    // Later the loco is back on the track: it is checked again and answers.
+    g_millis += MfxRegistry::RECHECK_INTERVAL_MS;
+    bus->sent.clear();
+    ctrl.poll();
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_INT(1, bus->countSent(0x03));
+    TEST_ASSERT_EQUAL_HEX8(0x06, bus->sent.back().data[5]);
+    bus->rx.push_back(mfxFrame(0x03, true, 0x3363, 0xAAAA0002UL, 6, 1));
+    ctrl.poll();
+    TEST_ASSERT_EQUAL_HEX16(0x4006, mfx.locIdOf(0xAAAA0002UL));
+}
+
 void test_mfx_master_gives_up_after_3_tries()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -937,6 +987,7 @@ int main()
     RUN_TEST(test_mfx_observer_ignores_discovery_and_verify_sid_0);
     RUN_TEST(test_mfx_master_discovery_bind_verify);
     RUN_TEST(test_mfx_master_gives_up_after_3_tries);
+    RUN_TEST(test_mfx_master_checks_known_locos_without_bind);
     RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
     RUN_TEST(test_bind_answer_for_another_uid_is_ignored);
     RUN_TEST(test_mfx_list_is_sorted_by_sid);

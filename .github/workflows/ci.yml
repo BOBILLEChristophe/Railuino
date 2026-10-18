@@ -94,3 +94,5 @@ jobs:
             - examples/01.Controller/DesktopStation
             - examples/03.Mfx/MfxObserver
             - examples/03.Mfx/MfxMaster
+            - examples/04.CV/MfxReadCV
+            - examples/04.CV/MfxWriteName

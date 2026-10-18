@@ -43,6 +43,12 @@ class TrackController;
  *   Bind -> Verify, 3 tries), as rocrail_mfx_discovery v0.4 by
  *   Christophe Bobille. Do NOT use it with an MS2 on the bus: both
  *   would give SIDs to the same locomotives.
+ *   With auto-save, the saved locomotives are not trusted at start: each
+ *   one is checked with a Verify (no Bind, so it keeps its SID). The ones
+ *   that answer are "confirmed", the others "unconfirmed" (not on the
+ *   track). An unconfirmed locomotive is checked again every
+ *   RECHECK_INTERVAL_MS, one at a time, so a loco put back on the track
+ *   is found again even if it does not answer the discovery.
  *
  * Usage:
  *   MfxRegistry mfx(ctrl);                 // or (ctrl, MfxRegistry::Mode::Master)
@@ -69,7 +75,10 @@ public:
     BindSent,   ///< Bind sent, Verify to send (master)
     VerifySent, ///< Verify sent, waiting for the answer (master)
     Confirmed,  ///< UID -> SID known and valid
-    Failed      ///< no confirmation after MAX_TRIES (master)
+    Failed,     ///< no confirmation after MAX_TRIES (master)
+    Saved,       ///< loaded from memory, to be checked by a Verify (master)
+    VerifySaved, ///< Verify sent for a saved UID/SID, no Bind (master)
+    Unconfirmed  ///< saved but did not answer: not on the track (master)
   };
 
   struct Entry
@@ -89,6 +98,7 @@ public:
   static const uint8_t MAX_TRIES = 3;
   static const uint32_t BIND_TO_VERIFY_MS = 20;
   static const uint32_t VERIFY_TIMEOUT_MS = 1000;
+  static const uint32_t RECHECK_INTERVAL_MS = 5000; ///< delay between automatic checks of absent saved locos
 
   /**
    * Called when a locomotive gets a (new) SID: uid, Loc-ID (0x4000 + SID).
@@ -116,6 +126,19 @@ public:
    * locomotive announces itself again and gets its SID again.
    */
   bool forceReRegistration();
+
+  /**
+   * Master only: check known UID/SID pairs again without a Bind.
+   * Discovery follows after asynchronous checks; call ctrl.poll().
+   */
+  bool verifyKnown();
+
+  /**
+   * Master mode: true while locomotives are being registered or checked
+   * (start sequence, Bind / Verify in progress, discovery not sent yet).
+   * Lets a sketch wait for the answers before printing its menu.
+   */
+  bool busy() const;
 
   /**
    * Runs the master state machine (Bind, Verify, retries). Called by
@@ -197,6 +220,10 @@ private:
   uint16_t mFirstSid;
   uint16_t mCounter;
   bool mAutoSave;
+  bool mDiscoveryPending;
+  bool mRecheckPending;
+  uint32_t mLastRecheckMs;
+  uint8_t mNextRecheckIndex;
   ChangeHandler mHandler;
   void *mHandlerContext;
 
