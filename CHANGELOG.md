@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Examples folder `04.CV`: `MfxReadCV` reads the main settings of an MFX decoder (name, manufacturer, acceleration, braking, start and maximum speed, volume), `MfxWriteName` writes the name of the loco into its decoder. Both find the places in the decoder themselves (block table), whatever the manufacturer; tested on ESU and Märklin decoders.
+- `MfxRegistry` (master mode), by Christophe Bobille: the locos saved in memory are checked at start with a Verify, without a new Bind, so they keep their SID. Those that answer are `confirmed`, the others `unconfirmed` (not on the track) and are checked again every 5 s, one at a time. New `verifyKnown()` and `busy()`.
+
+### Changed
+- MfxMaster: waits until the locos are checked or registered before printing the list and the menu; new command `v` (check the known locos again).
+- `MfxRegistry::forceReRegistration()` (MfxMaster `r`) did nothing: a decoder that receives the track signal only saves a new counter (Krauss 3.2.6, 4.3). It now switches the track power off, changes the counter, switches it on again and starts a discovery: every loco on the track registers again, keeping its SID if it is in the table. `clear()` (MfxMaster `c`) clears the table and does the same, so the locos get new SIDs.
+
 ## 0.14.1 — 2026-10-17
 
 ### Fixed

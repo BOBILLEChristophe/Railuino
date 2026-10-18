@@ -40,6 +40,8 @@ namespace
 
 MfxRegistry::MfxRegistry(TrackController &controller, Mode mode)
     : mCtrl(controller), mMode(mode), mFirstSid(5), mCounter(1), mAutoSave(false),
+      mDiscoveryPending(false), mRecheckPending(false),
+      mLastRecheckMs(0), mNextRecheckIndex(0),
       mHandler(nullptr), mHandlerContext(nullptr)
 {
 }
@@ -82,7 +84,52 @@ void MfxRegistry::begin()
   mCtrl.sendMessage(m);
 
   delay(1000);
-  startDiscovery();
+  bool hasSaved = false;
+  for (const Entry &e : mEntries)
+    if (e.state == State::Saved)
+      hasSaved = true;
+  if (hasSaved)
+    mDiscoveryPending = true; // service() verifies saved entries before discovery
+  else
+    startDiscovery();
+  mLastRecheckMs = millis();
+}
+
+bool MfxRegistry::verifyKnown()
+{
+  if (mMode != Mode::Master)
+    return false;
+  bool found = false;
+  for (Entry &e : mEntries)
+  {
+    if (e.state == State::Confirmed || e.state == State::Unconfirmed ||
+        e.state == State::Saved || e.state == State::VerifySaved)
+    {
+      e.state = State::Saved;
+      e.tries = 0;
+      found = true;
+    }
+  }
+  if (found)
+  {
+    mDiscoveryPending = true;
+    mRecheckPending = false;
+  }
+  return found;
+}
+
+bool MfxRegistry::busy() const
+{
+  if (mMode != Mode::Master)
+    return false;
+  if (mDiscoveryPending)
+    return true;
+  for (const Entry &e : mEntries)
+    if (e.state == State::New || e.state == State::BindSent ||
+        e.state == State::VerifySent || e.state == State::Saved ||
+        e.state == State::VerifySaved)
+      return true;
+  return false;
 }
 
 bool MfxRegistry::startDiscovery()
@@ -108,11 +155,29 @@ bool MfxRegistry::forceReRegistration()
 {
   if (mMode != Mode::Master)
     return false;
+  // Changed while the decoders have no track signal: they register again
+  // when the power comes back (Krauss 3.2.6, 4.2, 4.3).
+  TrackMessage m = TrackMessage::makeSystem(SysCmd::Stop);
+  mCtrl.sendMessage(m);
+  delay(500);
   mCounter++;
   if (mAutoSave)
     save();
-  return sendCounter();
+  sendCounter();
+  delay(500);
+  m = TrackMessage::makeSystem(SysCmd::Go);
+  mCtrl.sendMessage(m);
+  // A decoder needs 2 "central" commands after power-up (Krauss 4.2).
+  delay(2000);
+  for (Entry &e : mEntries)
+    if (e.state != State::Free)
+    {
+      e.state = State::Unconfirmed; // will be found again by the discovery
+      e.tries = 0;
+    }
+  return startDiscovery();
 }
+
 
 /* -------------------------------------------------------------------
    Table
@@ -204,8 +269,16 @@ void MfxRegistry::clear()
 {
   for (Entry &e : mEntries)
     e = Entry();
+  mDiscoveryPending = false;
+  mRecheckPending = false;
   if (mAutoSave)
     save();
+  // Master: the decoders still have their SID and would not answer a
+  // discovery; they register again only after a power cut with a new
+  // counter (tested on the layout: a Verify with UID 0 did not release
+  // them).
+  if (mMode == Mode::Master)
+    forceReRegistration();
 }
 
 const char *MfxRegistry::stateName(State state)
@@ -218,6 +291,9 @@ const char *MfxRegistry::stateName(State state)
   case State::VerifySent: return "verify sent";
   case State::Confirmed: return "confirmed";
   case State::Failed: return "FAILED";
+  case State::Saved: return "saved";
+  case State::VerifySaved: return "checking saved";
+  case State::Unconfirmed: return "unconfirmed";
   }
   return "?";
 }
@@ -364,7 +440,8 @@ void MfxRegistry::handle(const TrackMessage &m)
           log(F("[!] Verify: other SID for"), *e);
         return;
       }
-      if (e->state == State::VerifySent || e->state == State::BindSent)
+      if (e->state == State::VerifySent || e->state == State::BindSent ||
+          e->state == State::VerifySaved)
         confirmed(*e);
     }
     break;
@@ -381,7 +458,9 @@ void MfxRegistry::handle(const TrackMessage &m)
       {
         // Known locomotive announcing itself again: it lost its SID,
         // give it the same one again.
-        if (e->state == State::Confirmed || e->state == State::Failed)
+        if (e->state == State::Confirmed || e->state == State::Failed ||
+            e->state == State::Unconfirmed || e->state == State::Saved ||
+            e->state == State::VerifySaved)
         {
           e->tries = 0;
           e->state = State::New;
@@ -424,6 +503,78 @@ void MfxRegistry::service()
     return;
 
   const uint32_t now = millis();
+
+  // A returning, already registered decoder need not answer Discovery.
+  // Recheck only one unconfirmed saved UID/SID per interval (round robin).
+  // Never disturb an already confirmed locomotive.
+  bool registeringNewLoco = false;
+  for (const Entry &e : mEntries)
+    if (e.state == State::New || e.state == State::BindSent ||
+        e.state == State::VerifySent)
+      registeringNewLoco = true;
+  if (!mDiscoveryPending && !mRecheckPending &&
+      !registeringNewLoco &&
+      now - mLastRecheckMs >= RECHECK_INTERVAL_MS)
+  {
+    for (uint8_t offset = 0; offset < MAX_LOCOS; offset++)
+    {
+      const uint8_t index = (mNextRecheckIndex + offset) % MAX_LOCOS;
+      Entry &e = mEntries[index];
+      if (e.state != State::Unconfirmed)
+        continue;
+      e.state = State::Saved;
+      e.tries = 0;
+      mNextRecheckIndex = (index + 1) % MAX_LOCOS;
+      mRecheckPending = true;
+      break;
+    }
+    if (!mRecheckPending)
+      mLastRecheckMs = now;
+  }
+
+  // Restore persisted associations one at a time. Do not start Discovery
+  // until the last response/timeout, to avoid mixing mfx registration phases.
+  if (mDiscoveryPending || mRecheckPending)
+  {
+    for (Entry &e : mEntries)
+    {
+      if (e.state != State::VerifySaved)
+        continue;
+      if (now - e.lastSendMs >= VERIFY_TIMEOUT_MS)
+      {
+        if (++e.tries < MAX_TRIES)
+        {
+          e.state = State::Saved;
+          log(F("Saved MFX Verify retry:"), e);
+        }
+        else
+        {
+          e.state = State::Unconfirmed;
+          log(F("[!] Saved MFX loco not confirmed:"), e);
+        }
+      }
+      return;
+    }
+    for (Entry &e : mEntries)
+    {
+      if (e.state != State::Saved)
+        continue;
+      if (sendUidSid(Cmd::Verify, e))
+      {
+        e.lastSendMs = now;
+        e.state = State::VerifySaved;
+      }
+      return; // leave room in the CAN send queue; retry on next poll
+    }
+    if (mDiscoveryPending)
+    {
+      mDiscoveryPending = false;
+      startDiscovery();
+    }
+    mRecheckPending = false;
+    mLastRecheckMs = now;
+  }
+
   for (Entry &e : mEntries)
   {
     switch (e.state)
@@ -485,7 +636,8 @@ bool MfxRegistry::save()
   Stored table[MAX_LOCOS];
   uint8_t n = 0;
   for (const Entry &e : mEntries)
-    if (e.state == State::Confirmed)
+    if (e.state == State::Confirmed || e.state == State::Saved ||
+        e.state == State::VerifySaved || e.state == State::Unconfirmed)
       table[n++] = {e.uid, e.sid};
 
   Preferences prefs;
@@ -523,7 +675,7 @@ bool MfxRegistry::load()
       break;
     e->uid = table[i].uid;
     e->sid = table[i].sid;
-    e->state = State::Confirmed;
+    e->state = mMode == Mode::Master ? State::Saved : State::Confirmed;
   }
   return true;
 }
@@ -535,7 +687,8 @@ bool MfxRegistry::save()
   int address = RAILUINO_MFX_EEPROM_ADDRESS;
   uint8_t n = 0;
   for (const Entry &e : mEntries)
-    if (e.state == State::Confirmed)
+    if (e.state == State::Confirmed || e.state == State::Saved ||
+        e.state == State::VerifySaved || e.state == State::Unconfirmed)
       n++;
   EEPROM.put(address, STORAGE_MAGIC);
   address += sizeof(STORAGE_MAGIC);
@@ -545,7 +698,8 @@ bool MfxRegistry::save()
   address += sizeof(n);
   for (const Entry &e : mEntries)
   {
-    if (e.state != State::Confirmed)
+    if (e.state != State::Confirmed && e.state != State::Saved &&
+        e.state != State::VerifySaved && e.state != State::Unconfirmed)
       continue;
     const Stored s = {e.uid, e.sid};
     EEPROM.put(address, s);
@@ -583,7 +737,7 @@ bool MfxRegistry::load()
       break;
     e->uid = s.uid;
     e->sid = s.sid;
-    e->state = State::Confirmed;
+    e->state = mMode == Mode::Master ? State::Saved : State::Confirmed;
   }
   return true;
 }
