@@ -893,6 +893,44 @@ void test_mfx_master_checks_known_locos_without_bind()
     TEST_ASSERT_EQUAL_HEX16(0x4006, mfx.locIdOf(0xAAAA0002UL));
 }
 
+void test_mfx_master_clear_releases_and_reregistration_cuts_power()
+{
+    TrackController ctrl(*bus, 0xDF24);
+    MfxRegistry mfx(ctrl, MfxRegistry::Mode::Master);
+    ctrl.setMfxRegistry(&mfx); // without the start sequence
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0001UL, 5));
+    TEST_ASSERT_TRUE(mfx.assign(0xAAAA0002UL, 7));
+
+    // clear(): Verify with UID 0 and each SID, then a discovery.
+    bus->sent.clear();
+    mfx.clear();
+    TEST_ASSERT_EQUAL_size_t(3, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x03, commandOf(bus->sent[0]));
+    const uint8_t release5[6] = {0, 0, 0, 0, 0x00, 0x05};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(release5, bus->sent[0].data, 6);
+    TEST_ASSERT_EQUAL_HEX8(0x07, bus->sent[1].data[5]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, commandOf(bus->sent[2]));
+    TEST_ASSERT_EQUAL_UINT8(0, mfx.size());
+
+    // forceReRegistration(): Stop, counter + 1, Go, discovery.
+    bus->sent.clear();
+    TEST_ASSERT_TRUE(mfx.forceReRegistration());
+    TEST_ASSERT_EQUAL_size_t(4, bus->sent.size());
+    TEST_ASSERT_EQUAL_HEX8(0x00, bus->sent[0].data[4]); // Stop
+    TEST_ASSERT_EQUAL_HEX8(0x09, bus->sent[1].data[4]); // counter
+    TEST_ASSERT_EQUAL_HEX8(0x02, bus->sent[1].data[6]); // 1 -> 2
+    TEST_ASSERT_EQUAL_HEX8(0x01, bus->sent[2].data[4]); // Go
+    TEST_ASSERT_EQUAL_HEX8(0x01, commandOf(bus->sent[3])); // discovery
+
+    // Observer mode: clear() sends nothing.
+    MfxRegistry observer(ctrl);
+    TEST_ASSERT_TRUE(observer.assign(0xAAAA0003UL, 9));
+    bus->sent.clear();
+    observer.clear();
+    TEST_ASSERT_TRUE(bus->sent.empty());
+    TEST_ASSERT_FALSE(observer.release(9));
+}
+
 void test_mfx_master_gives_up_after_3_tries()
 {
     TrackController ctrl(*bus, 0xDF24);
@@ -988,6 +1026,7 @@ int main()
     RUN_TEST(test_mfx_master_discovery_bind_verify);
     RUN_TEST(test_mfx_master_gives_up_after_3_tries);
     RUN_TEST(test_mfx_master_checks_known_locos_without_bind);
+    RUN_TEST(test_mfx_master_clear_releases_and_reregistration_cuts_power);
     RUN_TEST(test_set_power_no_longer_sends_the_mfx_counter);
     RUN_TEST(test_bind_answer_for_another_uid_is_ignored);
     RUN_TEST(test_mfx_list_is_sorted_by_sid);

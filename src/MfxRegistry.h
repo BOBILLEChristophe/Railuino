@@ -122,10 +122,20 @@ public:
   bool startDiscovery();
 
   /**
-   * Master mode: changes the MFX re-registration counter, so that every
-   * locomotive announces itself again and gets its SID again.
+   * Master mode: every locomotive on the track registers again (a loco
+   * of the table gets the same SID again, a new one the next free SID). A decoder that receives the track signal only saves a new
+   * counter without registering again (Krauss 3.2.6, 4.3), so the track
+   * power is switched off, the counter changed, the power switched on
+   * again, then a discovery is started. Blocking, about 3 s.
    */
   bool forceReRegistration();
+
+  /**
+   * Master mode: releases the decoder that has this SID (Verify with
+   * UID 0 and this SID, as the MS2 does when a loco is deleted): it
+   * forgets its SID and answers the next discovery.
+   */
+  bool release(uint16_t sid);
 
   /**
    * Master only: check known UID/SID pairs again without a Bind.
@@ -208,6 +218,8 @@ public:
 
   /**
    * Forgets every locomotive (the saved table too if auto-save is on).
+   * Master mode: each one is released first (see release()), then a
+   * discovery is started, so the locos on the track register again.
    */
   void clear();
 

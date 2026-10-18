@@ -155,10 +155,37 @@ bool MfxRegistry::forceReRegistration()
 {
   if (mMode != Mode::Master)
     return false;
+  // Changed while the decoders have no track signal: they register again
+  // when the power comes back (Krauss 3.2.6, 4.2, 4.3).
+  TrackMessage m = TrackMessage::makeSystem(SysCmd::Stop);
+  mCtrl.sendMessage(m);
+  delay(500);
   mCounter++;
   if (mAutoSave)
     save();
-  return sendCounter();
+  sendCounter();
+  delay(500);
+  m = TrackMessage::makeSystem(SysCmd::Go);
+  mCtrl.sendMessage(m);
+  // A decoder needs 2 "central" commands after power-up (Krauss 4.2).
+  delay(2000);
+  for (Entry &e : mEntries)
+    if (e.state != State::Free)
+    {
+      e.state = State::Unconfirmed; // will be found again by the discovery
+      e.tries = 0;
+    }
+  return startDiscovery();
+}
+
+bool MfxRegistry::release(uint16_t sid)
+{
+  if (mMode != Mode::Master || !isValidSid(sid))
+    return false;
+  TrackMessage m = TrackMessage::make(Cmd::Verify, 0, 6); // UID 0
+  m.data[4] = highByte(sid);
+  m.data[5] = lowByte(sid);
+  return mCtrl.sendMessage(m);
 }
 
 /* -------------------------------------------------------------------
@@ -249,10 +276,22 @@ void MfxRegistry::onChange(ChangeHandler handler, void *context)
 
 void MfxRegistry::clear()
 {
+  const bool master = mMode == Mode::Master;
   for (Entry &e : mEntries)
+  {
+    if (master && e.state != State::Free)
+    {
+      release(e.sid); // the decoder forgets its SID
+      delay(20);      // room in the CAN send queue
+    }
     e = Entry();
+  }
+  mDiscoveryPending = false;
+  mRecheckPending = false;
   if (mAutoSave)
     save();
+  if (master)
+    startDiscovery();
 }
 
 const char *MfxRegistry::stateName(State state)
