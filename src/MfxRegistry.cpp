@@ -178,15 +178,6 @@ bool MfxRegistry::forceReRegistration()
   return startDiscovery();
 }
 
-bool MfxRegistry::release(uint16_t sid)
-{
-  if (mMode != Mode::Master || !isValidSid(sid))
-    return false;
-  TrackMessage m = TrackMessage::make(Cmd::Verify, 0, 6); // UID 0
-  m.data[4] = highByte(sid);
-  m.data[5] = lowByte(sid);
-  return mCtrl.sendMessage(m);
-}
 
 /* -------------------------------------------------------------------
    Table
@@ -276,30 +267,18 @@ void MfxRegistry::onChange(ChangeHandler handler, void *context)
 
 void MfxRegistry::clear()
 {
-  const bool master = mMode == Mode::Master;
-  if (master)
-  {
-    // Releases every SID up to the highest one in use (at least
-    // RELEASE_SIDS): also the locos that are no longer in the table,
-    // e.g. after a table cleared by an older version.
-    uint16_t last = RELEASE_SIDS;
-    for (const Entry &e : mEntries)
-      if (e.state != State::Free && e.sid > last)
-        last = e.sid;
-    for (uint16_t sid = 1; sid <= last; sid++)
-    {
-      release(sid); // the decoder that has this SID forgets it
-      delay(10);    // room in the CAN send queue
-    }
-  }
   for (Entry &e : mEntries)
     e = Entry();
   mDiscoveryPending = false;
   mRecheckPending = false;
   if (mAutoSave)
     save();
-  if (master)
-    startDiscovery();
+  // Master: the decoders still have their SID and would not answer a
+  // discovery; they register again only after a power cut with a new
+  // counter (tested on the layout: a Verify with UID 0 did not release
+  // them).
+  if (mMode == Mode::Master)
+    forceReRegistration();
 }
 
 const char *MfxRegistry::stateName(State state)

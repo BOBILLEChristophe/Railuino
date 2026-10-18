@@ -8,6 +8,7 @@
 
 ### Changed
 - MfxMaster: waits until the locos are checked or registered before printing the list and the menu; new command `v` (check the known locos again).
+- `MfxRegistry::forceReRegistration()` (MfxMaster `r`) did nothing: a decoder that receives the track signal only saves a new counter (Krauss 3.2.6, 4.3). It now switches the track power off, changes the counter, switches it on again and starts a discovery: every loco on the track registers again, keeping its SID if it is in the table. `clear()` (MfxMaster `c`) clears the table and does the same, so the locos get new SIDs.
 
 ## 0.14.1 — 2026-10-17
 

@@ -39,7 +39,7 @@
  *
  * Serial: l = list, d = new discovery, v = check the known locos again,
  *         r = every loco on the track registers again (same SID if known),
- *         c = clear the table (the locos on the track register again).
+ *         c = clear the table (the locos on the track get new SIDs).
  */
 
 #if defined(ARDUINO_ARCH_AVR)
@@ -159,12 +159,11 @@ void loop()
       mfx.forceReRegistration();
       break;
     case 'c':
-      // Each known loco is released (it forgets its SID), the table is
-      // cleared, then a discovery finds the locos on the track again.
-      // Chaque loco connue est libérée (elle oublie son SID), la table est
-      // effacée, puis une recherche retrouve les locos sur la voie.
+      // Table cleared, then as 'r': the locos on the track get new SIDs.
+      // Table effacée, puis comme 'r' : les locos sur la voie reçoivent
+      // de nouveaux SID.
+      Serial.println(F("Table cleared, the locos on the track register again (about 3 s)..."));
       mfx.clear();
-      Serial.println(F("Table cleared, the locos on the track register again"));
       break;
     case '\r':
     case '\n':
