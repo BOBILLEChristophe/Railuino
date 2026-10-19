@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Example DesktopStation: Desktop Station sends `setLocoSpeed(address,speed,speedStep)` with three values; the gateway accepted only two and answered `300 Command error`, so the speed did not work. The speed step is now accepted and ignored (the Märklin CAN speed command has none), and speeds above 1000 (Desktop Station sends up to 1023) are limited to 1000. Reported by a user with an ESP32.
+
 ### Added
 - Examples folder `04.CV`: `MfxReadCV` reads the main settings of an MFX decoder (name, manufacturer, acceleration, braking, start and maximum speed, volume), `MfxWriteName` writes the name of the loco into its decoder. Both find the places in the decoder themselves (block table), whatever the manufacturer; tested on ESU and Märklin decoders.
 - `MfxRegistry` (master mode), by Christophe Bobille: the locos saved in memory are checked at start with a Verify, without a new Bind, so they keep their SID. Those that answer are `confirmed`, the others `unconfirmed` (not on the track) and are checked again every 5 s, one at a time. New `verifyKnown()` and `busy()`.

@@ -25,7 +25,7 @@ Same syntax and answers as Uwe Monreal's gateway, which was used with Desktop St
 | Command | Answer |
 | --- | --- |
 | `setPower(1)` / `setPower(0)` | `200 Ok` |
-| `setLocoSpeed(16391,100)` | `200 Ok` |
+| `setLocoSpeed(16391,100)` or `setLocoSpeed(16391,100,0)` | `200 Ok` (the third value, the speed step sent by Desktop Station, is ignored; speed 0..1000, higher values are limited to 1000) |
 | `setLocoDirection(16391,1)`, `toggleLocoDirection(16391)` | `200 Ok` |
 | `setLocoFunction(16391,0,1)`, `toggleLocoFunction(16391,0)` | `200 Ok` |
 | `setTurnout(12289,1)` | `200 Ok` |
