@@ -27,7 +27,7 @@
 
 /**
  * CAN driver for the controller built into the ESP32 (TWAI), through
- * the ACAN_ESP32 library. It needs a CAN transceiver (SN65HVD230...).
+ * the ACAN_ESP32 library. It needs a CAN transceiver (MCP2562...).
  * The ESP32 has one TWAI controller: create only one Esp32TwaiDriver.
  *
  *   Esp32TwaiDriver can(22, 23);        // Rx, Tx
