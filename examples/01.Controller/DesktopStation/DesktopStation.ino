@@ -15,7 +15,7 @@
  * 115200 baud. Commands and answers follow Uwe Monreal's gateway, which
  * was tested with Desktop Station:
  *
- *   setPower(1)                 setLocoSpeed(16391,100)
+ *   setPower(1)                 setLocoSpeed(16391,100,0)  (speed step ignored)
  *   setLocoDirection(16391,1)   toggleLocoDirection(16391)
  *   setLocoFunction(16391,0,1)  toggleLocoFunction(16391,0)
  *   setTurnout(12289,1)         getVersion()
@@ -281,8 +281,12 @@ bool dispatch(const char *name, const uint16_t *a, uint8_t n)
 {
   if (!strcmp(name, "setPower") && n == 1)
     return ctrl.setPower(a[0] != 0);
-  if (!strcmp(name, "setLocoSpeed") && n == 2)
-    return ctrl.setLocoSpeed(a[0], a[1]);
+  // Desktop Station sends setLocoSpeed(address,speed,speedStep): the speed
+  // step (DCC 14/28/128) is not part of the Märklin CAN speed command, the
+  // Gleisbox uses the setting of the loco, so it is accepted and ignored.
+  // Desktop Station sends speeds up to 1023; the CAN protocol stops at 1000.
+  if (!strcmp(name, "setLocoSpeed") && (n == 2 || n == 3))
+    return ctrl.setLocoSpeed(a[0], a[1] > 1000 ? 1000 : a[1]);
   if (!strcmp(name, "setLocoDirection") && n == 2)
     return ctrl.setLocoDirection(a[0], static_cast<uint8_t>(a[1]));
   if (!strcmp(name, "toggleLocoDirection") && n == 1)
