@@ -27,7 +27,7 @@ Vidéo : https://youtu.be/x5fVPsChlIA
 
 | Carte | Contrôleur CAN | Pilote Railuino | Bibliothèque CAN |
 | --- | --- | --- | --- |
-| ESP32 | TWAI intégré + transceiver (SN65HVD230…) | `Esp32TwaiDriver` (par défaut) | [ACAN_ESP32](https://github.com/pierremolinaro/acan-esp32) ≥ 3.0.3 |
+| ESP32 | TWAI intégré + transceiver (MCP2562…) | `Esp32TwaiDriver` (par défaut) | [ACAN_ESP32](https://github.com/pierremolinaro/acan-esp32) ≥ 3.0.3 |
 | ESP32 | MCP2515 sur le bus SPI | `Mcp2515Driver` | [ACAN2515](https://github.com/pierremolinaro/acan2515) ≥ 2.1.3 |
 | Arduino Uno, Mega | MCP2515 sur le bus SPI | `Mcp2515Driver` (par défaut) | [ACAN2515](https://github.com/pierremolinaro/acan2515) ≥ 2.1.3 |
 
