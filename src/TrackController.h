@@ -516,9 +516,11 @@ public:
      - number: CV number (1..1023), index: 0..63 (MFX; 0 for DCC).
        They share data[4..5]: index in the 6 high bits of data[4], CV
        number in the 2 low bits of data[4] and in data[5].
-     - MFX: read and write on the main track. DCC: write on the main
-       track (POM); read only on a programming track (not with a
-       Gleisbox). MM2: no read.
+     - With a Gleisbox, its track output is used as a programming track
+       by default (as the MS2 does): this is how DCC and MM decoders are
+       written. mainTrack = true writes on the main track instead (DCC
+       POM), for decoders and command stations that support it.
+     - MFX: read and write. DCC: read only in programming mode. MM2: no read.
      - On an MFX decoder, the numbers address the MFX configuration
        space, not DCC-like CVs.
      Uses CV_TIMEOUT (10 s). Only one CV command at a time.
@@ -527,14 +529,14 @@ public:
   ------------------------------------------------------------------- */
 
   /**
-   * Writes 'value' to CV 'number'. mainTrack: true (default) for the
-   * main track (POM), false for a programming track. Returns true if
+   * Writes 'value' to CV 'number'. mainTrack: false (default) for the
+   * programming track, true for the main track (DCC POM). Returns true if
    * the Gleisbox answered. 'result', if not nullptr, receives its result
    * byte: bit 7 (0x80) write acknowledged, bit 6 (0x40) verify OK.
    * Depending on the decoder, a write can succeed with a negative result.
    */
   bool writeConfig(const uint32_t address, uint16_t number, uint8_t value,
-                   uint8_t index = 0, bool mainTrack = true,
+                   uint8_t index = 0, bool mainTrack = false,
                    uint8_t *result = nullptr);
 
   /**

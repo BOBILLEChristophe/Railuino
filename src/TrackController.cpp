@@ -790,8 +790,9 @@ bool TrackController::writeConfig(const uint32_t address, uint16_t number, uint8
     TrackMessage message = TrackMessage::make(Cmd::WriteConfig, address, 8);
     putCv(message, number, index);
     message.data[6] = value;
-    // Ctrl, bit 8: main track (1) or programming track (0). The Gleisbox
-    // has no programming track: 0 was sent before and DCC POM could not work.
+    // Ctrl, bit 8 (0x80): main track (1) or programming track (0), as in
+    // the CS2 CAN protocol. A Gleisbox writes DCC and MM decoders in
+    // programming mode (0), like the MS2: this is the default.
     message.data[7] = mainTrack ? 0x80 : 0x00;
 
     // CV_TIMEOUT (10 s), as in Railuino 0.9: a write can take seconds.

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- #30 `writeConfig()` wrote on the main track (POM) by default since 0.14.1, so writing a CV with a Gleisbox (example DesktopStation) no longer worked. The default is again the programming track (control byte 0), as in Railuino 0.9 and as the MS2 does with a Gleisbox; `mainTrack = true` still writes on the main track. Reported by uwemon.
 - Example DesktopStation: Desktop Station sends `setLocoSpeed(address,speed,speedStep)` with three values; the gateway accepted only two and answered `300 Command error`, so the speed did not work. The speed step is now accepted and ignored (the Märklin CAN speed command has none), and speeds above 1000 (Desktop Station sends up to 1023) are limited to 1000. Reported by a user with an ESP32.
 
 ### Added

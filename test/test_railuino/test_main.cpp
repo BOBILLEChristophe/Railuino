@@ -208,9 +208,9 @@ void test_write_config_main_track_and_result()
     TEST_ASSERT_EQUAL_HEX8(0x80, sent.data[7]); // main track (POM)
     TEST_ASSERT_EQUAL_HEX8(0xC0, result);       // written and verified
 
-    // Default call: main track too; programming track on request.
+    // Default call: programming track (issue #30); main track on request.
     TEST_ASSERT_TRUE(ctrl.writeConfig(0xC003, 3, 12));
-    TEST_ASSERT_EQUAL_HEX8(0x80, bus->sent.back().data[7]);
+    TEST_ASSERT_EQUAL_HEX8(0x00, bus->sent.back().data[7]);
     TEST_ASSERT_TRUE(ctrl.writeConfig(0xC003, 3, 12, 0, false));
     TEST_ASSERT_EQUAL_HEX8(0x00, bus->sent.back().data[7]);
 }
