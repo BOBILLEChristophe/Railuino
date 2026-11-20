@@ -1,1 +1,68 @@
-# S88 Feedback Examples / Exemples de rétrosignalisation S88This folder contains two complementary sketches for S88 feedback on the Märklin CAN bus, compatible out-of-the-box with **ESP32** (`ARDUINO_ARCH_ESP32`) and **Arduino Uno / Mega** (`ARDUINO_ARCH_AVR`).Ce dossier contient deux exemples complémentaires pour la gestion de la rétrosignalisation S88 sur le bus CAN Märklin, compatibles automatiquement avec **ESP32** (`ARDUINO_ARCH_ESP32`) et **Arduino Uno / Mega** (`ARDUINO_ARCH_AVR`).---## 1. Included Sketches / Programmes inclus### `CAN-S88-sniffer`* **EN:** Listens to S88 feedback events (`Marklin::Cmd::S88Event` / `0x11`) circulating on the CAN bus and forwards every contact change to a PC over USB Serial (`115200` baud) in CSV format: `S88;<contact>;<new_state>`.* **FR :** Écoute les événements de rétrosignalisation S88 (`Marklin::Cmd::S88Event` / `0x11`) circulant sur le bus CAN et transmet chaque changement d'état vers un PC via le port Série USB (`115200` bauds) au format CSV : `S88;<contact>;<nouvel_etat>`.### `S88-to-CAN-Bridge`* **EN:** Reads physical S88 shift-register modules wired directly to the microcontroller (via `TrackReporterS88`), broadcasts state changes onto the Märklin CAN bus as official `0x11` frames, and answers on-demand CAN polling queries (`0x10` / `0x11`).* **FR :** Lit des modules S88 filaires branchés directement sur le microcontrôleur (via `TrackReporterS88`), diffuse les changements d'état sur le bus CAN Märklin sous forme de trames officielles `0x11`, et répond aux requêtes d'interrogation CAN à la demande (`0x10` / `0x11`).---## 2. Wiring / Câblage matériel### CAN Bus Interface / Interface Bus CAN (250 kbit/s)| Signal | ESP32 (TWAI + SN65HVD230) | Arduino Uno (MCP2515 SPI) | Arduino Mega (MCP2515 SPI) || :--- | :--- | :--- | :--- || **CAN TX** | `GPIO 23` | *Via MCP2515* | *Via MCP2515* || **CAN RX** | `GPIO 22` | *Via MCP2515* | *Via MCP2515* || **SPI SCK** | — | `D13` | `D52` || **SPI MISO** | — | `D12` | `D50` || **SPI MOSI** | — | `D11` | `D51` || **MCP2515 CS** | — | `D10` | `D10` || **MCP2515 INT** | — | `D2` | `D2` |> **Note (MCP2515 Quartz) :** Check the crystal frequency printed on your MCP2515 board (`8000000UL` for 8 MHz or `16000000UL` for 16 MHz) and update `MCP2515_QUARTZ` in the sketch accordingly.  > **Note (Quartz MCP2515) :** Vérifiez la fréquence inscrite sur le quartz de votre module MCP2515 (`8000000UL` pour 8 MHz ou `16000000UL` pour 16 MHz) et ajustez `MCP2515_QUARTZ` dans le code en conséquence.### S88 Bus (`S88-to-CAN-Bridge` only / uniquement)| S88 Pin (6-pin / RJ45) | Direction | ESP32 Pin | Arduino Uno / Mega Pin || :--- | :--- | :--- | :--- || **DATA** | S88 ? MCU | `GPIO 33` | `D4` || **CLOCK** | MCU ? S88 | `GPIO 25` | `D5` || **LOAD (PS)** | MCU ? S88 | `GPIO 26` | `D6` || **RESET** | MCU ? S88 | `GPIO 27` | `D7` || **GND** | Common | `GND` | `GND` || **+5V (VCC)** | Power | `5V` *(see note)* | `5V` |> ?? **Voltage Level Warning (ESP32) :** Classic Märklin S88 modules operate at **5 V**, whereas ESP32 GPIOs are **3.3 V** tolerant only. Use a level shifter (or a voltage divider on the `DATA` line from S88 to `GPIO 33`) when powering S88 modules at 5 V with an ESP32.  > ?? **Attention aux niveaux logiques (ESP32) :** Les modules S88 classiques fonctionnent en **5 V**, alors que les broches de l'ESP32 sont en **3,3 V**. Utilisez un adaptateur de niveau logique (ou un pont diviseur sur la ligne `DATA` entre le S88 et `GPIO 33`) si vos modules S88 sont alimentés en 5 V avec un ESP32.---## 3. Serial Output Format / Format de sortie Série (`115200` baud)* **`CAN-S88-sniffer`** outputs incoming bus events:  ```text  READY;CAN-S88-sniffer  S88;1;1  S88;1;0  ```* **`S88-to-CAN-Bridge`** outputs transmitted bus events:  ```text  READY;S88-to-CAN-Bridge  TX;S88;1;1  TX;S88;1;0  ```  *(Format: `<PREFIX>;<Contact_1..512>;<State_0_or_1>`)*
+# S88 Feedback Examples / Exemples de r√©trosignalisation S88
+
+This folder contains two complementary sketches for S88 feedback on the M√§rklin CAN bus, compatible out-of-the-box with **ESP32** (`ARDUINO_ARCH_ESP32`) and **Arduino Uno / Mega** (`ARDUINO_ARCH_AVR`).
+
+Ce dossier contient deux exemples compl√©mentaires pour la gestion de la r√©trosignalisation S88 sur le bus CAN M√§rklin, compatibles automatiquement avec **ESP32** (`ARDUINO_ARCH_ESP32`) et **Arduino Uno / Mega** (`ARDUINO_ARCH_AVR`).
+
+---
+
+## 1. Included Sketches / Programmes inclus
+
+### `CAN-S88-sniffer`
+* **EN:** Listens to S88 feedback events (`Marklin::Cmd::S88Event` / `0x11`) circulating on the CAN bus and forwards every contact change to a PC over USB Serial (`115200` baud) in CSV format: `S88;<contact>;<new_state>`.
+* **FR :** √âcoute les √©v√©nements de r√©trosignalisation S88 (`Marklin::Cmd::S88Event` / `0x11`) circulant sur le bus CAN et transmet chaque changement d'√©tat vers un PC via le port S√©rie USB (`115200` bauds) au format CSV : `S88;<contact>;<nouvel_etat>`.
+
+### `S88-to-CAN-Bridge`
+* **EN:** Reads physical S88 shift-register modules wired directly to the microcontroller (via `TrackReporterS88`), broadcasts state changes onto the M√§rklin CAN bus as official `0x11` frames, and answers on-demand CAN polling queries (`0x10` / `0x11`).
+* **FR :** Lit des modules S88 filaires branch√©s directement sur le microcontr√¥leur (via `TrackReporterS88`), diffuse les changements d'√©tat sur le bus CAN M√§rklin sous forme de trames officielles `0x11`, et r√©pond aux requ√™tes d'interrogation CAN √† la demande (`0x10` / `0x11`).
+
+---
+
+## 2. Wiring / C√¢blage mat√©riel
+
+### CAN Bus Interface / Interface Bus CAN (250 kbit/s)
+
+| Signal | ESP32 (TWAI + SN65HVD230) | Arduino Uno (MCP2515 SPI) | Arduino Mega (MCP2515 SPI) |
+| :--- | :--- | :--- | :--- |
+| **CAN TX** | `GPIO 23` | *Via MCP2515* | *Via MCP2515* |
+| **CAN RX** | `GPIO 22` | *Via MCP2515* | *Via MCP2515* |
+| **SPI SCK** | ‚Äî | `D13` | `D52` |
+| **SPI MISO** | ‚Äî | `D12` | `D50` |
+| **SPI MOSI** | ‚Äî | `D11` | `D51` |
+| **MCP2515 CS** | ‚Äî | `D10` | `D10` |
+| **MCP2515 INT** | ‚Äî | `D2` | `D2` |
+
+> **Note (MCP2515 Quartz) :** Check the crystal frequency printed on your MCP2515 board (`8000000UL` for 8 MHz or `16000000UL` for 16 MHz) and update `MCP2515_QUARTZ` in the sketch accordingly.  
+> **Note (Quartz MCP2515) :** V√©rifiez la fr√©quence inscrite sur le quartz de votre module MCP2515 (`8000000UL` pour 8 MHz ou `16000000UL` pour 16 MHz) et ajustez `MCP2515_QUARTZ` dans le code en cons√©quence.
+
+### S88 Bus (`S88-to-CAN-Bridge` only / uniquement)
+
+| S88 Pin (6-pin / RJ45) | Direction | ESP32 Pin | Arduino Uno / Mega Pin |
+| :--- | :--- | :--- | :--- |
+| **DATA** | S88 ‚Üí MCU | `GPIO 33` | `D4` |
+| **CLOCK** | MCU ‚Üí S88 | `GPIO 25` | `D5` |
+| **LOAD (PS)** | MCU ‚Üí S88 | `GPIO 26` | `D6` |
+| **RESET** | MCU ‚Üí S88 | `GPIO 27` | `D7` |
+| **GND** | Common | `GND` | `GND` |
+| **+5V (VCC)** | Power | `5V` *(see note)* | `5V` |
+
+> ‚ö†Ô∏è **Voltage Level Warning (ESP32) :** Classic M√§rklin S88 modules operate at **5 V**, whereas ESP32 GPIOs are **3.3 V** tolerant only. Use a level shifter (or a voltage divider on the `DATA` line from S88 to `GPIO 33`) when powering S88 modules at 5 V with an ESP32.  
+> ‚ö†Ô∏è **Attention aux niveaux logiques (ESP32) :** Les modules S88 classiques fonctionnent en **5 V**, alors que les broches de l'ESP32 sont en **3,3 V**. Utilisez un adaptateur de niveau logique (ou un pont diviseur sur la ligne `DATA` entre le S88 et `GPIO 33`) si vos modules S88 sont aliment√©s en 5 V avec un ESP32.
+
+---
+
+## 3. Serial Output Format / Format de sortie S√©rie (`115200` baud)
+
+* **`CAN-S88-sniffer`** outputs incoming bus events:
+  ```text
+  READY;CAN-S88-sniffer
+  S88;1;1
+  S88;1;0
+  ```
+* **`S88-to-CAN-Bridge`** outputs transmitted bus events:
+  ```text
+  READY;S88-to-CAN-Bridge
+  TX;S88;1;1
+  TX;S88;1;0
+  ```
+  *(Format: `<PREFIX>;<Contact_1..512>;<State_0_or_1>`)*
