@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.14.2 — 2026-11-20
 
 ### Fixed
 - #30 `writeConfig()` wrote on the main track (POM) by default since 0.14.1, so writing a CV with a Gleisbox (example DesktopStation) no longer worked. The default is again the programming track (control byte 0), as in Railuino 0.9 and as the MS2 does with a Gleisbox; `mainTrack = true` still writes on the main track. Reported by uwemon.
