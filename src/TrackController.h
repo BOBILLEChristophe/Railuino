@@ -560,6 +560,24 @@ public:
    * error messages and more commands.
    */
   void handleUserCommands(String command);
+
+  /**
+   * Sets the track sub-log of the given locomotive.
+   * See cs2CAN-Protokoll-2_0.pdf chapter 2.6
+   * Valid values are:
+   *  MM2:  
+   *   0:   MM2 2040, control locomotive at 20kHz and FDEC at 40 kHz 
+   *   1:   MM2_LOK_20, only control locomotive at 20 kHz. 
+   *   2:   MM2_FKT_40, only control FDEC at 40 kHz. 
+   *  DCC:  
+   *   0:   DCC short adress, 28 driving modes [=DCC-FS-Default],  
+   *   1:   DCC short adress, 14 driving modes  
+   *   2:   DCC short adress, 126 driving modes  
+   *   3:   DCC large adress, 28 driving modes  
+   *   4:   DCC large adress, 126 driving modes 
+   * The return value reflects whether the call was successful.
+   */  
+  bool LocDataProt(const uint32_t address, byte value);
 };
 
 #endif // TRACKCONTROLLER_H

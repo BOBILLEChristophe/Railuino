@@ -850,3 +850,15 @@ void TrackController::handleUserCommands(String command)
     CommandParser parser(*this);
     parser.execute(command.c_str(), mLog);
 }
+
+/* -------------------------------------------------------------------
+   TrackController::LocDataProt
+-------------------------------------------------------------------  */
+
+bool TrackController::LocDataProt(const uint32_t address, byte value) 
+{
+	TrackMessage message = TrackMessage::make(Cmd::System, address, 6);
+    message.data[4] = 0x05;
+    message.data[5] = value;
+    return exchangeMessage(message, message, mTimeout);
+}	
