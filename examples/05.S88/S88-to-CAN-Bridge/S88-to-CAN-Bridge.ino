@@ -1,6 +1,8 @@
 /*
  * Railuino - S88-to-CAN-Bridge
  *
+ * Copyright (C) 2026 christophe bobille
+ *
  * Reads physical S88 feedback modules wired to the board (via TrackReporterS88)
  * and broadcasts every contact state change onto the Märklin CAN bus as an
  * official S88 Event frame (command 0x11 / Marklin::Cmd::S88Event).

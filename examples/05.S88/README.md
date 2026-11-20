@@ -16,6 +16,10 @@ Ce dossier contient deux exemples complémentaires pour la gestion de la rétros
 * **EN:** Reads physical S88 shift-register modules wired directly to the microcontroller (via `TrackReporterS88`), broadcasts state changes onto the Märklin CAN bus as official `0x11` frames, and answers on-demand CAN polling queries (`0x10` / `0x11`).
 * **FR :** Lit des modules S88 filaires branchés directement sur le microcontrôleur (via `TrackReporterS88`), diffuse les changements d'état sur le bus CAN Märklin sous forme de trames officielles `0x11`, et répond aux requêtes d'interrogation CAN à la demande (`0x10` / `0x11`).
 
+### `S88-Local-Monitor`
+* **EN:** Reads physical S88 shift-register modules wired directly to the board (via `TrackReporterS88`, without any CAN bus interface) and prints contact changes along with a grouped 16-bit binary overview (`Mod 1: 0010 0000 1000 0000`) to the Serial Monitor (`115200` baud).
+* **FR :** Lit des modules S88 filaires câblés directement sur la carte (via `TrackReporterS88`, sans aucune interface bus CAN) et affiche dans le moniteur série (`115200` bauds) les changements d'état ainsi qu'une vue binaire groupée sur 16 bits (`Mod 1: 0010 0000 1000 0000`).
+
 ---
 
 ## 2. Wiring / Câblage matériel
@@ -66,3 +70,6 @@ Ce dossier contient deux exemples complémentaires pour la gestion de la rétros
   TX;S88;1;0
   ```
   *(Format: `<PREFIX>;<Contact_1..512>;<State_0_or_1>`)*
+
+
+
